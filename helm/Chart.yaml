@@ -1,0 +1,17 @@
+apiVersion: v2
+name: notification
+version: 0.0.0
+description: notification UI
+home: https://github.com/onecx/notification
+keywords:
+  - notification
+sources:
+  - https://github.com/onecx/notification
+maintainers:
+  - name: # ACTION: add name of maintainer
+    email: # ACTION: add email of maintainer
+dependencies:
+  - name: helm-angular-app
+    version: ^0
+    repository: oci://ghcr.io/onecx/charts
+    alias: app

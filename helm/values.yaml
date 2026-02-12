@@ -1,0 +1,35 @@
+app:
+  name: ui
+  image:
+    repository: 'onecx/notification'
+  routing:
+    enabled: true
+    path: /mfe/notification/
+
+  operator:
+    # Microfrontend
+    microfrontend:
+      enabled: true
+      specs:
+        main:
+          exposedModule: './NotificationModule'
+          description: 'OneCX Notification Module'
+          note: 'OneCX Notification UI module auto import via MF operator'
+          type: MODULE
+          technology: WEBCOMPONENTMODULE
+          remoteName: notification
+          tagName: notification-webcomponent
+    # Permission
+    # ACTION S11 Update permissions and roles: https://onecx.github.io/docs/documentation/current/onecx-nx-plugins/generator/search/update-permissions.html#action-11
+    permission:
+      enabled: true
+      spec:
+        permissions:
+    # Keycloak
+    keycloak:
+      client:
+        enabled: true
+        spec:
+          kcConfig:
+            clientId: 'notification'
+# PIPE Config

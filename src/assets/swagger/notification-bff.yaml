@@ -1,0 +1,6 @@
+---
+openapi: 3.0.3
+info:
+  title: notification-bff
+  version: '1.0'
+paths: {}
