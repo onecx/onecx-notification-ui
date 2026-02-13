@@ -19,8 +19,6 @@ app:
           technology: WEBCOMPONENTMODULE
           remoteName: notification
           tagName: notification-webcomponent
-    # Permission
-    # ACTION S11 Update permissions and roles: https://onecx.github.io/docs/documentation/current/onecx-nx-plugins/generator/search/update-permissions.html#action-11
     permission:
       enabled: true
       spec:

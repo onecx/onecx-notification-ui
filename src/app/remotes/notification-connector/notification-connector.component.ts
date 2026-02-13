@@ -37,7 +37,6 @@ export class NotificationTopic extends Topic<Notification> {
   selector: 'app-notification-connector',
   standalone: true,
   template: '',
-  styleUrls: ['./notification-connector.component.scss'],
   imports: [AngularRemoteComponentsModule, CommonModule],
   providers: []
 })
