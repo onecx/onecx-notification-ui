@@ -1,7 +1,7 @@
 app:
   name: ui
   image:
-    repository: 'onecx/notification'
+    repository: 'onecx/onecx-notification-ui'
   routing:
     enabled: true
     path: /mfe/notification/
@@ -31,5 +31,5 @@ app:
         enabled: true
         spec:
           kcConfig:
-            clientId: 'notification'
+            clientId: 'onecx-notification-ui'
 # PIPE Config
