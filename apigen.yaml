@@ -1,4 +1,4 @@
-serviceSuffix: ''
+serviceSuffix: 'APIService'
 stringEnums: true
+useSingleRequestParameter: true
 providedIn: 'any'
-ngVersion: '15.2.7'

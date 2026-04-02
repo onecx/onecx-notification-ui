@@ -1,0 +1,44 @@
+openapi: 3.0.3
+info:
+  title: onecx-notification-bff
+  description: Backend-For-Frontend (BFF) services for onecx-notification. This API provides endpoints to manage notification items.
+  version: 1.0.0
+servers:
+  - url: http://onecx-notification-bff:8080/
+tags: []
+paths: {}
+components:
+  schemas:
+    ProblemDetailResponse:
+      type: object
+      properties:
+        errorCode:
+          type: string
+        detail:
+          type: string
+        params:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProblemDetailParam'
+        invalidParams:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProblemDetailInvalidParam'
+    ProblemDetailParam:
+      type: object
+      properties:
+        key:
+          type: string
+        value:
+          type: string
+    ProblemDetailInvalidParam:
+      type: object
+      properties:
+        name:
+          type: string
+        message:
+          type: string
+    OffsetDateTime:
+      format: date-time
+      type: string
+      example: 2022-03-10T12:15:50-04:00

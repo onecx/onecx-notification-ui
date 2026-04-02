@@ -1,15 +1,15 @@
 apiVersion: v2
-name: onecx-notification-ui
+name: notification
 version: 0.0.0
-description: OneCX Notification UI
-home: https://github.com/onecx/onecx-notification-ui
+description: notification UI
+home: https://github.com/onecx-apps/notification
 keywords:
   - notification
 sources:
-  - https://github.com/onecx/onecx-notification-ui
+  - https://github.com/onecx-apps/notification
 maintainers:
-  - name: Tkit Developer
-    email: tkit_dev@1000kit.org
+  - name: # ACTION: add name of maintainer
+    email: # ACTION: add email of maintainer
 dependencies:
   - name: helm-angular-app
     version: ^0
