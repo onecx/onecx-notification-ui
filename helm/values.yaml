@@ -16,8 +16,15 @@ app:
           note: 'OneCX Notification UI module auto import via MF operator'
           type: MODULE
           technology: WEBCOMPONENTMODULE
-          remoteName: notification
+          remoteName: onecx-notification
           tagName: ocx-notification-component
+        notification-connector:
+          exposedModule: "./NotificationConnectorComponent"
+          description: "Provides notification connection"
+          type: COMPONENT
+          technology: WEBCOMPONENTMODULE
+          remoteName: onecx-notification
+          tagName: ocx-notification-connector-component
     # Microservice
     microservice:
       spec:

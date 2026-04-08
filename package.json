@@ -49,8 +49,9 @@
     "@onecx/integration-interface": "^6.17.0",
     "@onecx/ngrx-accelerator": "^6.17.0",
     "@onecx/nx-plugin": "6.2.0",
-    "@onecx/shell-core": "^6.17.0",
+    "@onecx/shell-core": "6.5.0",
     "@primeng/themes": "^19.0.6",
+    "@types/sockjs-client": "^1.5.4",
     "@webcomponents/webcomponentsjs": "^2.8.0",
     "keycloak-angular": "^19.0.2",
     "ngrx-store-localstorage": "^19.0.0",
@@ -58,6 +59,7 @@
     "primeicons": "^7.0.0",
     "primeng": "^19.1.0",
     "rxjs": "~7.8.0",
+    "sockjs-client": "^1.6.1",
     "zod": "^3.22.1",
     "zone.js": "~0.15.0"
   },

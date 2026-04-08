@@ -19,7 +19,8 @@ const onProxyRes = function (_proxyRes, req, res) {
 
 const PROXY_CONFIG = {
   '/bff': {
-    target: 'http://notification-bff',
+    target: 'http://onecx-notification-bff',
+    ws: true,
     secure: false,
     pathRewrite: { '^.*/bff': '' },
     changeOrigin: true,

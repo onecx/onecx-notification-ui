@@ -6,7 +6,12 @@
     "outDir": "./dist/out-tsc",
     "types": []
   },
-  "files": ["src/app/onecx-notification.remote.module.ts", "src/polyfills.ts", "src/main.ts"],
+  "files": [
+    "src/app/onecx-notification.remote.module.ts",
+    "src/polyfills.ts",
+    "src/main.ts",
+    "src/app/remotes/notification-connector/notification-connector.component.main.ts"
+  ],
   "include": ["src/**/*.d.ts"],
   "exclude": ["jest.config.ts", "src/**/*.test.ts", "src/**/*.spec.ts"]
 }
