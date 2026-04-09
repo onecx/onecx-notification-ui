@@ -1,7 +1,7 @@
 app:
   name: ui
   image:
-    repository: 'onecx-apps/onecx-notification-ui'
+    repository: 'onecx/onecx-notification-ui'
   routing:
     enabled: true
     path: /mfe/notification/
