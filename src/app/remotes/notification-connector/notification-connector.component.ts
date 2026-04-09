@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common'
 import { Component, Input, OnDestroy, inject } from '@angular/core'
 import { UntilDestroy, untilDestroyed } from '@ngneat/until-destroy'
-import { Observable, combineLatest, defer, from, timer } from 'rxjs'
+import { Observable, defer, from, timer } from 'rxjs'
 import { retry, switchMap } from 'rxjs/operators'
 import { Topic } from '@onecx/accelerator'
 import { AuthProxyService } from '@onecx/angular-auth'
@@ -82,32 +82,7 @@ export class OneCXNotificationConnectorComponent implements OnDestroy, ocxRemote
   }
 
   private connectWebSocket(url: string): void {
-    const createSocketConnection = (): Observable<RawNotification | RegisterMessage> => {
-      return from(this.authService.updateTokenIfNeeded()).pipe(
-        switchMap(() => from(this.userService.profile$.asObservable())),
-        switchMap((profile) => {
-          const headerValues = this.authService.getHeaderValues()
-          // const token = headerValues['Authorization']?.replace('Bearer ', '')
-          const token = null;
-          const wsUrlWithAuth = token ? `${url}?token=${encodeURIComponent(token)}` : url
-
-          this.sockJsClient?.close();
-          this.sockJsClient = new SockJsRxClient<RawNotification | RegisterMessage, RegisterMessage>({
-            onOpen: () => {
-              console.log('WebSocket connection established, connecting with user id:', profile.userId)
-              this.sockJsClient?.send({ type: 'register', address: `notifications.onecx.new.${profile.userId}`, authHeaders: headerValues })
-            },
-            onClose: () => {
-              console.log('WebSocket connection closed')
-            }
-          })
-
-          return this.sockJsClient.connect(wsUrlWithAuth)
-        })
-      )
-    }
-
-    defer(createSocketConnection)
+    defer(() => this.createSocketConnection(url))
       .pipe(
         retry({
           delay: (error) => {
@@ -117,17 +92,57 @@ export class OneCXNotificationConnectorComponent implements OnDestroy, ocxRemote
         }),
         untilDestroyed(this)
       )
-      .subscribe((notification) => {
-        if (notification.type === 'rec') {
-          const body = JSON.parse(notification.body)
-          const parsedNotification: Notification = {
-            ...notification,
-            body
-          }
-          console.log('Received notification(rec):', parsedNotification)
-          this.notificationTopic.publish(parsedNotification)
-        }
+      .subscribe((notification) => this.handleIncomingNotification(notification))
+  }
+
+  private createSocketConnection(url: string): Observable<RawNotification | RegisterMessage> {
+    return from(this.authService.updateTokenIfNeeded()).pipe(
+      switchMap(() => this.userService.profile$.asObservable()),
+      switchMap((profile) => {
+        const headerValues = this.authService.getHeaderValues()
+        const wsUrlWithAuth = this.buildWsUrl(url, headerValues)
+
+        const client = this.recreateSockJsClient(profile.userId, headerValues)
+
+        return client.connect(wsUrlWithAuth)
       })
+    )
+  }
+
+  private buildWsUrl(url: string, headerValues: Record<string, string>): string {
+    // const token = headerValues['Authorization']?.replace('Bearer ', '')
+    const token = null
+    return token ? `${url}?token=${encodeURIComponent(token)}` : url
+  }
+
+  private recreateSockJsClient(userId: string, authHeaders: Record<string, string>): SockJsRxClient<RawNotification | RegisterMessage, RegisterMessage> {
+    this.sockJsClient?.close()
+    this.sockJsClient = new SockJsRxClient<RawNotification | RegisterMessage, RegisterMessage>({
+      onOpen: () => {
+        console.log('WebSocket connection established, connecting with user id:', userId)
+        this.sockJsClient?.send({ type: 'register', address: `notifications.onecx.new.${userId}`, authHeaders })
+      },
+      onClose: () => {
+        console.log('WebSocket connection closed')
+      }
+    })
+
+    return this.sockJsClient
+  }
+
+  private handleIncomingNotification(notification: RawNotification | RegisterMessage): void {
+    if (notification.type !== 'rec') {
+      return
+    }
+
+    const body = JSON.parse(notification.body)
+    const parsedNotification: Notification = {
+      ...notification,
+      body
+    }
+    
+    console.log('Received notification(rec):', parsedNotification)
+    this.notificationTopic.publish(parsedNotification)
   }
 
   ngOnDestroy(): void {
