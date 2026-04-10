@@ -1,19 +1,20 @@
 import { CommonModule } from '@angular/common'
 import { Component, Input, OnDestroy, inject } from '@angular/core'
 import { UntilDestroy, untilDestroyed } from '@ngneat/until-destroy'
-import { Observable, defer, from, timer } from 'rxjs'
-import { retry, switchMap } from 'rxjs/operators'
 import { Topic } from '@onecx/accelerator'
 import { AuthProxyService } from '@onecx/angular-auth'
+import { Observable, defer, from, timer } from 'rxjs'
+import { retry, switchMap } from 'rxjs/operators'
 
+import { UserService } from '@onecx/angular-integration-interface'
 import {
   AngularRemoteComponentsModule,
   RemoteComponentConfig,
   ocxRemoteComponent,
   ocxRemoteWebcomponent
 } from '@onecx/angular-remote-components'
+import { createLogger } from 'src/app/shared/utils/logger.utils'
 import { SockJsRxClient } from '../../shared/utils/sockjs.utils'
-import { UserService } from '@onecx/angular-integration-interface'
 
 interface RegisterMessage {
   type: 'register',
@@ -70,6 +71,7 @@ export class OneCXNotificationConnectorComponent implements OnDestroy, ocxRemote
   }
   private readonly authService = inject(AuthProxyService)
   private readonly userService = inject(UserService)
+  private readonly logger = createLogger("NotificationConnectorComponent")
 
 
   @Input() set ocxRemoteComponentConfig(config: RemoteComponentConfig) {
@@ -86,7 +88,7 @@ export class OneCXNotificationConnectorComponent implements OnDestroy, ocxRemote
       .pipe(
         retry({
           delay: (error) => {
-            console.error('WebSocket error, reconnecting in ' + this.reconnectDelay + 'ms...', error)
+            this.logger.error('WebSocket error, reconnecting in ' + this.reconnectDelay + 'ms...', error)
             return timer(this.reconnectDelay)
           }
         }),
@@ -119,11 +121,11 @@ export class OneCXNotificationConnectorComponent implements OnDestroy, ocxRemote
     this.sockJsClient?.close()
     this.sockJsClient = new SockJsRxClient<RawNotification | RegisterMessage, RegisterMessage>({
       onOpen: () => {
-        console.log('WebSocket connection established, connecting with user id:', userId)
+        this.logger.info('WebSocket connection established, connecting with user id:', userId)
         this.sockJsClient?.send({ type: 'register', address: `notifications.onecx.new.${userId}`, authHeaders })
       },
       onClose: () => {
-        console.log('WebSocket connection closed')
+        this.logger.info('WebSocket connection closed')
       }
     })
 
@@ -141,7 +143,7 @@ export class OneCXNotificationConnectorComponent implements OnDestroy, ocxRemote
       body
     }
     
-    console.log('Received notification(rec):', parsedNotification)
+    this.logger.info('Received notification(rec):', parsedNotification)
     this.notificationTopic.publish(parsedNotification)
   }
 

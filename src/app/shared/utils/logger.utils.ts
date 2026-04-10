@@ -1,5 +1,7 @@
 import debug, { type Debugger } from "debug";
 
+export const createLogger = createLoggerFactory("onecx-notification-ui");
+
 export type LogLevel = "debug" | "info" | "warn" | "error";
 
 /**
