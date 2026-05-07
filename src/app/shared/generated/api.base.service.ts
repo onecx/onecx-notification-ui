@@ -1,5 +1,5 @@
 /**
- * notification-bff
+ * onecx-notification-bff
  *
  * 
  *
@@ -13,7 +13,7 @@ import { Configuration } from './configuration';
 import { OpenApiHttpParams, QueryParamStyle, concatHttpParamsObject} from './query.params';
 
 export class BaseService {
-    protected basePath = 'http://localhost';
+    protected basePath = 'http://onecx-notification-bff:8080';
     public defaultHeaders = new HttpHeaders();
     public configuration: Configuration;
     public encoder: HttpParameterCodec;

@@ -1,43 +1,32 @@
-import { CommonModule } from '@angular/common';
-import { HttpClient, HttpClientModule } from '@angular/common/http';
-import { APP_INITIALIZER, isDevMode, NgModule } from '@angular/core';
-import { BrowserModule } from '@angular/platform-browser';
-import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
-import { LetDirective } from '@ngrx/component';
-import { EffectsModule } from '@ngrx/effects';
-import { StoreRouterConnectingModule } from '@ngrx/router-store';
-import { StoreModule } from '@ngrx/store';
-import { StoreDevtoolsModule } from '@ngrx/store-devtools';
-import {
-  TranslateLoader,
-  TranslateModule,
-  TranslateService,
-} from '@ngx-translate/core';
-import { KeycloakAuthModule } from '@onecx/keycloak-auth';
-import {
-  AppStateService,
-  APP_CONFIG,
-  ConfigurationService,
-  createTranslateLoader,
-  PortalCoreModule,
-  translateServiceInitializer,
-  UserService,
-} from '@onecx/portal-integration-angular';
-import { environment } from 'src/environments/environment';
-import { AppRoutingModule } from './app-routing.module';
-import { AppComponent } from './app.component';
-import { metaReducers, reducers } from './app.reducers';
+import { CommonModule } from '@angular/common'
+import { HttpClient, provideHttpClient, withInterceptorsFromDi } from '@angular/common/http'
+import { NgModule, isDevMode } from '@angular/core'
+import { BrowserModule } from '@angular/platform-browser'
+import { BrowserAnimationsModule } from '@angular/platform-browser/animations'
+import { LetDirective } from '@ngrx/component'
+import { EffectsModule } from '@ngrx/effects'
+import { StoreRouterConnectingModule } from '@ngrx/router-store'
+import { StoreModule } from '@ngrx/store'
+import { StoreDevtoolsModule } from '@ngrx/store-devtools'
+import { TranslateLoader, TranslateModule } from '@ngx-translate/core'
+import { AngularAcceleratorModule } from '@onecx/angular-accelerator'
+import { APP_CONFIG, AppStateService, ConfigurationService } from '@onecx/angular-integration-interface'
+import { AppRoutingModule } from './app-routing.module'
+import { AppComponent } from './app.component'
+import { metaReducers, reducers } from './app.reducers'
 
-import { Configuration } from './shared/generated';
-import { apiConfigProvider } from './shared/utils/apiConfigProvider.utils';
+import { AngularAuthModule } from '@onecx/angular-auth'
+import { createTranslateLoader } from '@onecx/angular-utils'
+import { Configuration } from 'src/app/shared/generated'
+import { apiConfigProvider } from 'src/app/shared/utils/apiConfigProvider.utils'
+import { environment } from 'src/environments/environment'
 
-export const commonImports = [CommonModule];
+export const commonImports = [CommonModule]
 
 @NgModule({
   declarations: [AppComponent],
   imports: [
     ...commonImports,
-    KeycloakAuthModule,
     BrowserModule,
     BrowserAnimationsModule,
     AppRoutingModule,
@@ -49,34 +38,29 @@ export const commonImports = [CommonModule];
       logOnly: !isDevMode(),
       autoPause: true,
       trace: false,
-      traceLimit: 75,
+      traceLimit: 75
     }),
     EffectsModule.forRoot([]),
-    HttpClientModule,
-    PortalCoreModule.forRoot('notification-app'),
+    AngularAcceleratorModule,
+    AngularAuthModule,    
     TranslateModule.forRoot({
-      extend: true,
+      isolate: true,
       loader: {
         provide: TranslateLoader,
         useFactory: createTranslateLoader,
-        deps: [HttpClient, AppStateService],
-      },
-    }),
+        deps: [HttpClient, AppStateService]
+      }
+    })
   ],
   providers: [
+    provideHttpClient(withInterceptorsFromDi()),
     { provide: APP_CONFIG, useValue: environment },
     {
       provide: Configuration,
       useFactory: apiConfigProvider,
-      deps: [ConfigurationService, AppStateService],
-    },
-    {
-      provide: APP_INITIALIZER,
-      useFactory: translateServiceInitializer,
-      multi: true,
-      deps: [UserService, TranslateService],
-    },
+      deps: [ConfigurationService, AppStateService]
+    }
   ],
-  bootstrap: [AppComponent],
+  bootstrap: [AppComponent]
 })
 export class AppModule {}

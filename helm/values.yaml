@@ -5,29 +5,34 @@ app:
   routing:
     enabled: true
     path: /mfe/notification/
-
   operator:
     # Microfrontend
     microfrontend:
       enabled: true
       specs:
         main:
-          exposedModule: './NotificationModule'
-          description: 'OneCX Notification Module'
+          exposedModule: './OneCXNotificationModule'
+          description: 'OneCX Notification UI'
           note: 'OneCX Notification UI module auto import via MF operator'
           type: MODULE
           technology: WEBCOMPONENTMODULE
-          remoteName: notification
-          tagName: notification-webcomponent
+          remoteName: onecx-notification
+          tagName: ocx-notification-component
+        notification-connector:
+          exposedModule: "./NotificationConnectorComponent"
+          description: "Provides notification connection"
+          type: COMPONENT
+          technology: WEBCOMPONENTMODULE
+          remoteName: onecx-notification
+          tagName: ocx-notification-connector-component
+    # Microservice
+    microservice:
+      spec:
+        name: OneCX Notification UI
+        description: OneCX Notification Frontend
+    # Permission
     permission:
       enabled: true
       spec:
         permissions:
-    # Keycloak
-    keycloak:
-      client:
-        enabled: true
-        spec:
-          kcConfig:
-            clientId: 'onecx-notification-ui'
-# PIPE Config
+        # ACTION P: Adjust permissions for the entity

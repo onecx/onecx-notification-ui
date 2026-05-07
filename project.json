@@ -24,19 +24,28 @@
           },
           {
             "glob": "**/*",
-            "input": "./node_modules/@onecx/portal-integration-angular/assets/",
-            "output": "/onecx-portal-lib/assets/"
+            "input": "./node_modules/@onecx/angular-accelerator/assets/",
+            "output": "/onecx-angular-accelerator/assets/"
+          },
+          {
+            "glob": "**/*",
+            "input": "./node_modules/@onecx/angular-utils/assets/",
+            "output": "/onecx-angular-utils/assets/"
+          },
+          {
+            "glob": "**/*",
+            "input": "./node_modules/@onecx/shell-core/assets/",
+            "output": "/onecx-shell-core/assets/"
           }
         ],
         "styles": [
-          "./src/styles.scss",
-          "node_modules/primeicons/primeicons.css",
-          "node_modules/primeng/resources/primeng.min.css",
-          "node_modules/@onecx/portal-integration-angular/assets/output.css"
+          {
+            "input": "src/styles.scss",
+            "bundleName": "styles",
+            "inject": true
+          }
         ],
-        "scripts": [
-          "node_modules/@webcomponents/webcomponentsjs/webcomponents-bundle.js"
-        ],
+        "scripts": ["node_modules/@webcomponents/webcomponentsjs/webcomponents-bundle.js"],
         "customWebpackConfig": {
           "path": "webpack.config.js"
         },
@@ -47,13 +56,13 @@
           "budgets": [
             {
               "type": "initial",
-              "maximumWarning": "500kb",
-              "maximumError": "1mb"
+              "maximumWarning": "1mb",
+              "maximumError": "2mb"
             },
             {
               "type": "anyComponentStyle",
-              "maximumWarning": "2kb",
-              "maximumError": "4kb"
+              "maximumWarning": "8kb",
+              "maximumError": "10kb"
             }
           ],
           "outputHashing": "all",
@@ -88,12 +97,19 @@
       "defaultConfiguration": "development",
       "options": {
         "disableHostCheck": true,
+        "host": "0.0.0.0",
         "publicHost": "http://localhost:4200",
-        "proxyConfig": "proxy.conf.js"
+        "proxyConfig": "proxy.conf.js",
+        "headers": {
+          "Allow": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Headers": "*",
+          "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS"
+        }
       }
     },
     "extract-i18n": {
-      "executor": "@angular-devkit/build-angular:extract-i18n",
+      "executor": "@angular/build:extract-i18n",
       "options": {
         "buildTarget": "notification:build"
       }

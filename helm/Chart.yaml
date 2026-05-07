@@ -1,7 +1,7 @@
 apiVersion: v2
 name: onecx-notification-ui
 version: 0.0.0
-description: OneCX Notification UI
+description: notification UI
 home: https://github.com/onecx/onecx-notification-ui
 keywords:
   - notification

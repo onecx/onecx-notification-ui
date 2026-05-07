@@ -1,5 +1,5 @@
-import { bootstrapModule } from '@onecx/angular-webcomponents';
-import { environment } from 'src/environments/environment';
-import { NotificationModule } from './app/notification-app.remote.module';
+import { bootstrapModule } from '@onecx/angular-webcomponents'
+import { environment } from 'src/environments/environment'
+import { OneCXNotificationModule } from './app/onecx-notification.remote.module'
 
-bootstrapModule(NotificationModule, 'microfrontend', environment.production);
+bootstrapModule(OneCXNotificationModule, 'microfrontend', environment.production)

@@ -1,6 +1,23 @@
 # Add files here to ignore them from prettier formatting
-/dist
-/coverage
-/.nx/cache
+.nx
 .angular
-src/app/shared/generated
+.husky
+.docusaurus
+.github
+.scannerwork
+.dockerignore
+.prettierignore
+.browserslistrc
+.eslintcache
+dist
+helm
+nginx
+reports
+node_modules
+LICENSE
+CHANGELOG.md
+README.md
+Dockerfile
+*.log
+*.sh
+src/app/shared/generated/**

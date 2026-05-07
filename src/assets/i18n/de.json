@@ -1,5 +1,5 @@
 {
   "Notification": {
-    "ARIA-LABEL": "Notification App"
+    "ARIA_LABEL": "Notification App"
   }
 }

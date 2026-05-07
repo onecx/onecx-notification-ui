@@ -7,7 +7,7 @@
     "types": []
   },
   "files": [
-    "src/app/notification-app.remote.module.ts",
+    "src/app/onecx-notification.remote.module.ts",
     "src/polyfills.ts",
     "src/main.ts",
     "src/app/remotes/notification-connector/notification-connector.component.main.ts"

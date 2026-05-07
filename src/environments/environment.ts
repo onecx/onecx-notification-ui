@@ -10,8 +10,8 @@ export const environment = {
   KEYCLOAK_URL: 'http://keycloak-app/',
   KEYCLOAK_REALM: 'OneCX',
   KEYCLOAK_CLIENT_ID: 'portal-mf-shell',
-  TKIT_PORTAL_ID: 'ADMIN',
-};
+  TKIT_PORTAL_ID: 'ADMIN'
+}
 
 /*
  * For easier debugging in development mode, you can import the following file

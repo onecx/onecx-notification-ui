@@ -9,6 +9,10 @@ encoder.ts
 git_push.sh
 index.ts
 model/models.ts
+model/problemDetailInvalidParam.ts
+model/problemDetailParam.ts
+model/problemDetailResponse.ts
 param.ts
+provide-api.ts
 query.params.ts
 variables.ts
