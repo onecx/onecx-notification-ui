@@ -20,7 +20,7 @@
     "@angular-architects/module-federation": "^18.0.4",
     "@angular/animations": "^19.0.7",
     "@angular/cdk": "^19.0.7",
-    "@angular/common": "^19.0.7",
+    "@angular/common": "^21.2.12",
     "@angular/compiler": "^19.0.7",
     "@angular/core": "^19.0.7",
     "@angular/elements": "^19.0.7",
