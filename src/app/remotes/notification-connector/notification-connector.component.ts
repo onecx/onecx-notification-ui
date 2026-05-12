@@ -29,6 +29,13 @@ export interface RawNotification {
   body: string;
 }
 
+export interface RawNotification {
+  type: 'rec'
+  address: string;
+  headers: { [key: string]: string }
+  body: string;
+}
+
 export interface Notification {
   type: string,
   address: string,
