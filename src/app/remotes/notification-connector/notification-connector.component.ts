@@ -19,7 +19,14 @@ import { SockJsRxClient } from '../../shared/utils/sockjs.utils'
 interface RegisterMessage {
   type: 'register',
   address: string,
-  authHeaders: Record<string, string>
+  token: string
+}
+
+export interface RawNotification {
+  type: 'rec'
+  address: string;
+  headers: { [key: string]: string }
+  body: string;
 }
 
 export interface RawNotification {
@@ -79,7 +86,9 @@ export class OneCXNotificationConnectorComponent implements OnDestroy, ocxRemote
   }
 
   ocxInitRemoteComponent(remoteComponentConfig: RemoteComponentConfig) {
-    const wsUrl = remoteComponentConfig.baseUrl + '/bff/eventbus'
+    const wsUrl = remoteComponentConfig.baseUrl.endsWith('/')
+      ? remoteComponentConfig.baseUrl + 'bff/eventbus'
+      : remoteComponentConfig.baseUrl + '/bff/eventbus'
     this.connectWebSocket(wsUrl)
   }
 
@@ -102,27 +111,30 @@ export class OneCXNotificationConnectorComponent implements OnDestroy, ocxRemote
       switchMap(() => this.userService.profile$.asObservable()),
       switchMap((profile) => {
         const headerValues = this.authService.getHeaderValues()
-        const wsUrlWithAuth = this.buildWsUrl(url, headerValues)
+        const token = this.extractBearerToken(headerValues)
+        const client = this.recreateSockJsClient(profile.userId, token)
 
-        const client = this.recreateSockJsClient(profile.userId, headerValues)
-
-        return client.connect(wsUrlWithAuth)
+        return client.connect(url)
       })
     )
   }
 
-  private buildWsUrl(url: string, headerValues: Record<string, string>): string {
-    // const token = headerValues['Authorization']?.replace('Bearer ', '')
-    const token = null
-    return token ? `${url}?token=${encodeURIComponent(token)}` : url
+  private extractBearerToken(headerValues: Record<string, string>): string {
+    const authorization = headerValues['Authorization']
+    if (!authorization) {
+      this.logger.warn('Authorization header missing when registering WebSocket connection')
+      return ''
+    }
+
+    return authorization.replace(/^Bearer\s+/i, '')
   }
 
-  private recreateSockJsClient(userId: string, authHeaders: Record<string, string>): SockJsRxClient<RawNotification | RegisterMessage, RegisterMessage> {
+  private recreateSockJsClient(userId: string, token: string): SockJsRxClient<RawNotification | RegisterMessage, RegisterMessage> {
     this.sockJsClient?.close()
     this.sockJsClient = new SockJsRxClient<RawNotification | RegisterMessage, RegisterMessage>({
       onOpen: () => {
         this.logger.info('WebSocket connection established, connecting with user id:', userId)
-        this.sockJsClient?.send({ type: 'register', address: `notifications.onecx.new.${userId}`, authHeaders })
+        this.sockJsClient?.send({ type: 'register', address: `notifications.onecx.new.${userId}`, token })
       },
       onClose: () => {
         this.logger.info('WebSocket connection closed')
