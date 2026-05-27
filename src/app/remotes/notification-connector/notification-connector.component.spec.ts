@@ -119,7 +119,7 @@ describe('OneCXNotificationConnectorComponent', () => {
 
     expect(authServiceMock.updateTokenIfNeeded).toHaveBeenCalled()
     expect(authServiceMock.getHeaderValues).toHaveBeenCalled()
-    expect(component['recreateSockJsClient']).toHaveBeenCalledWith('test-user', { Authorization: 'Bearer mock-token' })
+    expect(component['recreateSockJsClient']).toHaveBeenCalledWith('test-user', 'mock-token')
     expect(mockSocketClient.connect).toHaveBeenCalledWith('http://localhost:8080/bff/eventbus')
   })
 
@@ -208,17 +208,9 @@ describe('OneCXNotificationConnectorComponent', () => {
     await flushPromises()
 
     expect(authServiceMock.getHeaderValues).toHaveBeenCalled()
-    expect(component['recreateSockJsClient']).toHaveBeenCalledWith('test-user', {})
+    expect(component['recreateSockJsClient']).toHaveBeenCalledWith('test-user', '')
     expect(mockSocketClient.connect).toHaveBeenCalledWith('http://localhost:8080/bff/eventbus')
   })
 
-  it('should keep ws url unchanged in buildWsUrl because token query is disabled', () => {
-    const resultWithHeader = component['buildWsUrl']('http://localhost:8080/bff/eventbus', {
-      Authorization: 'Bearer mock-token'
-    })
-    const resultWithoutHeader = component['buildWsUrl']('http://localhost:8080/bff/eventbus', {})
 
-    expect(resultWithHeader).toBe('http://localhost:8080/bff/eventbus')
-    expect(resultWithoutHeader).toBe('http://localhost:8080/bff/eventbus')
-  })
 })

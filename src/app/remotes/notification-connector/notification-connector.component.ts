@@ -86,7 +86,9 @@ export class OneCXNotificationConnectorComponent implements OnDestroy, ocxRemote
   }
 
   ocxInitRemoteComponent(remoteComponentConfig: RemoteComponentConfig) {
-    const wsUrl = remoteComponentConfig.baseUrl + 'bff/eventbus'
+    const wsUrl = remoteComponentConfig.baseUrl.endsWith('/')
+      ? remoteComponentConfig.baseUrl + 'bff/eventbus'
+      : remoteComponentConfig.baseUrl + '/bff/eventbus'
     this.connectWebSocket(wsUrl)
   }
 
