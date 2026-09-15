@@ -1,12 +1,22 @@
 /* eslint-disable */
 import type { Config } from 'jest'
 
+// list of patterns for which no transformation/transpiling should be made
+const ignoredModulePatterns: string = ['d3-.*', '(.*.mjs$)'].join('|')
+// list of patterns excluded by testing/coverage (default: node_modules)
+const ignoredPathPatterns: string[] = [
+  '<rootDir>/src/main.ts',
+  '<rootDir>/src/bootstrap.ts',
+  '<rootDir>/src/app/shared/generated'
+]
+
 const config: Config = {
   displayName: 'onecx-notification-ui',
-  verbose: false,
+  testEnvironment: 'jsdom',
   preset: './jest.preset.js',
-  setupFilesAfterEnv: ['<rootDir>/src/test-setup.ts'],
+  setupFilesAfterEnv: ['<rootDir>/setup-jest.ts'],
   testMatch: ['<rootDir>/src/app/**/*.spec.ts'],
+  testPathIgnorePatterns: ignoredPathPatterns,
   transform: {
     '^.+\\.(ts|mjs|js|html)$': [
       'jest-preset-angular',
@@ -16,7 +26,7 @@ const config: Config = {
       }
     ]
   },
-  transformIgnorePatterns: ['node_modules/(?!@ngrx|(?!deck.gl)|d3-scale|(?!.*.mjs$))'],
+  transformIgnorePatterns: [`node_modules/(?!${ignoredModulePatterns})`],
   snapshotSerializers: [
     'jest-preset-angular/build/serializers/no-ng-attributes',
     'jest-preset-angular/build/serializers/ng-snapshot',
@@ -24,7 +34,7 @@ const config: Config = {
   ],
   collectCoverage: true,
   coverageDirectory: '<rootDir>/reports/coverage/',
-  coveragePathIgnorePatterns: ['src/app/shared/generated'],
+  coveragePathIgnorePatterns: ignoredPathPatterns,
   coverageReporters: ['json', 'lcov', 'text', 'text-summary'],
   testResultsProcessor: 'jest-sonar-reporter',
   reporters: [

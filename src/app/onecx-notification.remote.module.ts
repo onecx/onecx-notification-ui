@@ -1,34 +1,34 @@
 import { HttpClient, provideHttpClient, withInterceptorsFromDi } from '@angular/common/http'
-import { BrowserModule } from '@angular/platform-browser'
 import { DoBootstrap, Injector, isDevMode, NgModule, inject, provideAppInitializer } from '@angular/core'
+import { BrowserModule } from '@angular/platform-browser'
+import { BrowserAnimationsModule } from '@angular/platform-browser/animations'
+import { Router, RouterModule } from '@angular/router'
+import { Actions, EffectsModule, EffectsRunner, EffectSources } from '@ngrx/effects'
 import { StoreRouterConnectingModule } from '@ngrx/router-store'
 import { StoreModule } from '@ngrx/store'
 import { StoreDevtoolsModule } from '@ngrx/store-devtools'
 import { MissingTranslationHandler, TranslateLoader, TranslateModule } from '@ngx-translate/core'
+
 import { AngularAcceleratorMissingTranslationHandler, AngularAcceleratorModule } from '@onecx/angular-accelerator'
-import { AppStateService, ConfigurationService } from '@onecx/angular-integration-interface'
-import { routes } from './app-routing.module'
-import { Router, RouterModule } from '@angular/router'
-import { Actions, EffectsModule, EffectsRunner, EffectSources } from '@ngrx/effects'
 import { AngularAuthModule } from '@onecx/angular-auth'
-import { initializeRouter, createAppEntrypoint } from '@onecx/angular-webcomponents'
-import { BrowserAnimationsModule } from '@angular/platform-browser/animations'
-import { provideNavigatedEventStoreConnector } from '@onecx/ngrx-accelerator'
-
-import { commonImports } from './app.module'
-import { AppEntrypointComponent } from './app-entrypoint.component'
-import { metaReducers, reducers } from './app.reducers'
-
+import { AppStateService, ConfigurationService } from '@onecx/angular-integration-interface'
 import {
   createTranslateLoader,
   provideTranslationPathFromMeta,
   provideThemeConfig,
   provideAngularUtils
 } from '@onecx/angular-utils'
+import { initializeRouter, createAppEntrypoint } from '@onecx/angular-webcomponents'
+import { provideNavigatedEventStoreConnector } from '@onecx/ngrx-accelerator'
 import { ShellCoreModule } from '@onecx/shell-core'
+
 import { Configuration } from 'src/app/shared/generated'
 import { SharedModule } from 'src/app/shared/shared.module'
 import { apiConfigProvider } from 'src/app/shared/utils/apiConfigProvider.utils'
+import { AppEntrypointComponent } from './app-entrypoint.component'
+import { commonImports } from './app.module'
+import { metaReducers, reducers } from './app.reducers'
+import { routes } from './app-routing.module'
 
 // Workaround for the following issue:
 // https://github.com/ngrx/platform/issues/3700

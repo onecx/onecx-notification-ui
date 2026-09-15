@@ -9,7 +9,6 @@ export const environment = {
 
   KEYCLOAK_URL: 'http://keycloak-app/',
   KEYCLOAK_REALM: 'OneCX',
-  KEYCLOAK_CLIENT_ID: 'portal-mf-shell',
   TKIT_PORTAL_ID: 'ADMIN'
 }
 
