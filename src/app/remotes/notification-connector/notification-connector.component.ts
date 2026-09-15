@@ -1,5 +1,4 @@
-import { CommonModule } from '@angular/common'
-import { Component, Input, OnDestroy, inject } from '@angular/core'
+import { ChangeDetectionStrategy, Component, Input, OnDestroy, inject } from '@angular/core'
 import { UntilDestroy, untilDestroyed } from '@ngneat/until-destroy'
 import { Topic } from '@onecx/accelerator'
 import { AuthProxyService } from '@onecx/angular-auth'
@@ -62,10 +61,9 @@ export class NotificationTopic extends Topic<Notification> {
 
 @Component({
   selector: 'app-notification-connector',
-  standalone: true,
   template: '',
-  imports: [AngularRemoteComponentsModule, CommonModule],
-  providers: []
+  imports: [AngularRemoteComponentsModule],
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 @UntilDestroy()
 export class OneCXNotificationConnectorComponent implements OnDestroy, ocxRemoteComponent, ocxRemoteWebcomponent {

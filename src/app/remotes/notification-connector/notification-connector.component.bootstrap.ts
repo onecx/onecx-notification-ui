@@ -1,5 +1,4 @@
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http'
-import { BrowserModule } from '@angular/platform-browser'
 import { provideRouter } from '@angular/router'
 import { importProvidersFrom } from '@angular/core'
 import { AngularAuthModule } from '@onecx/angular-auth'
@@ -15,7 +14,6 @@ bootstrapRemoteComponent(
   [
     provideHttpClient(withInterceptorsFromDi()),
     importProvidersFrom(AngularAuthModule),
-    importProvidersFrom(BrowserModule),
     importProvidersFrom(BrowserAnimationsModule),
     provideRouter([
       {

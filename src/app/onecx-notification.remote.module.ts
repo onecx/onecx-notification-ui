@@ -1,5 +1,4 @@
 import { HttpClient, provideHttpClient, withInterceptorsFromDi } from '@angular/common/http'
-import { BrowserModule } from '@angular/platform-browser'
 import { DoBootstrap, Injector, isDevMode, NgModule, inject, provideAppInitializer } from '@angular/core'
 import { StoreRouterConnectingModule } from '@ngrx/router-store'
 import { StoreModule } from '@ngrx/store'
@@ -15,7 +14,6 @@ import { initializeRouter, createAppEntrypoint } from '@onecx/angular-webcompone
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations'
 import { provideNavigatedEventStoreConnector } from '@onecx/ngrx-accelerator'
 
-import { commonImports } from './app.module'
 import { AppEntrypointComponent } from './app-entrypoint.component'
 import { metaReducers, reducers } from './app.reducers'
 
@@ -27,7 +25,6 @@ import {
 } from '@onecx/angular-utils'
 import { ShellCoreModule } from '@onecx/shell-core'
 import { Configuration } from 'src/app/shared/generated'
-import { SharedModule } from 'src/app/shared/shared.module'
 import { apiConfigProvider } from 'src/app/shared/utils/apiConfigProvider.utils'
 
 // Workaround for the following issue:
@@ -38,11 +35,8 @@ effectProvidersForWorkaround.forEach((p) => (p.ɵprov.providedIn = null))
 @NgModule({
   declarations: [AppEntrypointComponent],
   imports: [
-    ...commonImports,
     AngularAcceleratorModule,
     RouterModule.forRoot(routes),
-    SharedModule,
-    BrowserModule,
     BrowserAnimationsModule,
     AngularAuthModule,
     ShellCoreModule,
