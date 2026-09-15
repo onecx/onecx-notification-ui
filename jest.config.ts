@@ -1,11 +1,10 @@
-/* eslint-disable */
 import type { Config } from 'jest'
 
 const config: Config = {
   displayName: 'onecx-notification-ui',
   verbose: false,
   preset: './jest.preset.js',
-  setupFilesAfterEnv: ['<rootDir>/src/test-setup.ts'],
+  setupFilesAfterEnv: ['<rootDir>/setup-jest.ts'],
   testMatch: ['<rootDir>/src/app/**/*.spec.ts'],
   transform: {
     '^.+\\.(ts|mjs|js|html)$': [

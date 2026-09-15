@@ -13,7 +13,6 @@ import { Actions, EffectsModule, EffectsRunner, EffectSources } from '@ngrx/effe
 import { AngularAuthModule } from '@onecx/angular-auth'
 import { initializeRouter, createAppEntrypoint } from '@onecx/angular-webcomponents'
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations'
-import { provideNavigatedEventStoreConnector } from '@onecx/ngrx-accelerator'
 
 import { commonImports } from './app.module'
 import { AppEntrypointComponent } from './app-entrypoint.component'
@@ -82,13 +81,12 @@ effectProvidersForWorkaround.forEach((p) => (p.ɵprov.providedIn = null))
       const initializerFn = initializeRouter(inject(Router), inject(AppStateService))
       return initializerFn()
     }),
-    provideNavigatedEventStoreConnector(),
     provideThemeConfig(),
     provideAngularUtils()
   ]
 })
 export class OneCXNotificationModule implements DoBootstrap {
-  private injector = inject(Injector)
+  private readonly injector = inject(Injector)
 
   ngDoBootstrap(): void {
     createAppEntrypoint(AppEntrypointComponent, 'ocx-notification-component', this.injector)
