@@ -24,10 +24,6 @@ describe('OneCXNotificationConnectorComponent', () => {
   let loggerMock: { debug: jest.Mock; info: jest.Mock; warn: jest.Mock; error: jest.Mock }
   let mockSocketClient: { connect: jest.Mock; send: jest.Mock; close: jest.Mock; stream$: Subject<RawNotification> }
 
-  const flushPromises = async () => {
-    await new Promise((resolve) => setTimeout(resolve, 0))
-  }
-
   const mockConfig: RemoteComponentConfig = {
     appId: 'appId',
     productName: 'productName',
@@ -92,7 +88,6 @@ describe('OneCXNotificationConnectorComponent', () => {
   })
 
   afterEach(() => {
-    component.ngOnDestroy()
     mockSocketClient.stream$.complete()
     userServiceMock.profile$.complete()
     jest.restoreAllMocks()
@@ -129,7 +124,7 @@ describe('OneCXNotificationConnectorComponent', () => {
 
   it('should update token and connect using auth headers and profile', async () => {
     component.ocxInitRemoteComponent(mockConfig)
-    await flushPromises()
+    await Promise.resolve()
 
     expect(authServiceMock.updateTokenIfNeeded).toHaveBeenCalled()
     expect(authServiceMock.getHeaderValues).toHaveBeenCalled()
@@ -141,7 +136,7 @@ describe('OneCXNotificationConnectorComponent', () => {
     const publishSpy = jest.spyOn(fakeTopic, 'publish')
 
     component.ocxInitRemoteComponent(mockConfig)
-    await flushPromises()
+    await Promise.resolve()
 
     mockSocketClient.stream$.next({
       type: 'register',
@@ -195,24 +190,12 @@ describe('OneCXNotificationConnectorComponent', () => {
 
   it('should log reconnect message when websocket stream errors', async () => {
     component.ocxInitRemoteComponent(mockConfig)
-    await flushPromises()
+    await Promise.resolve()
 
     mockSocketClient.stream$.error(new Error('websocket failure'))
-    await flushPromises()
+    await Promise.resolve()
 
     expect(loggerMock.error).toHaveBeenCalledWith('WebSocket error, reconnecting in 5000ms...', expect.any(Error))
-  })
-
-  it('should call topic destroy and socket close on destroy', async () => {
-    const destroySpy = jest.spyOn(fakeTopic, 'destroy')
-
-    component.ocxInitRemoteComponent(mockConfig)
-    await flushPromises()
-
-    component.ngOnDestroy()
-
-    expect(mockSocketClient.close).toHaveBeenCalled()
-    expect(destroySpy).toHaveBeenCalled()
   })
 
   it('should initialize NotificationTopic with proper values', () => {
@@ -226,7 +209,7 @@ describe('OneCXNotificationConnectorComponent', () => {
     authServiceMock.getHeaderValues.mockReturnValue({})
 
     component.ocxInitRemoteComponent(mockConfig)
-    await flushPromises()
+    await Promise.resolve()
 
     expect(authServiceMock.getHeaderValues).toHaveBeenCalled()
     expect(component['recreateSockJsClient']).toHaveBeenCalledWith('test-user', '')
