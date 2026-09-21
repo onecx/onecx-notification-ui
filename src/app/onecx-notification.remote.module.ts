@@ -1,6 +1,5 @@
 import { HttpClient, provideHttpClient, withInterceptorsFromDi } from '@angular/common/http'
 import { DoBootstrap, Injector, isDevMode, NgModule, inject, provideAppInitializer } from '@angular/core'
-import { BrowserModule } from '@angular/platform-browser'
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations'
 import { Router, RouterModule } from '@angular/router'
 import { Actions, EffectsModule, EffectsRunner, EffectSources } from '@ngrx/effects'
@@ -23,10 +22,8 @@ import {
 import { ShellCoreModule } from '@onecx/shell-core'
 
 import { Configuration } from 'src/app/shared/generated'
-import { SharedModule } from 'src/app/shared/shared.module'
 import { apiConfigProvider } from 'src/app/shared/utils/apiConfigProvider.utils'
 import { AppEntrypointComponent } from './app-entrypoint.component'
-import { commonImports } from './app.module'
 import { metaReducers, reducers } from './app.reducers'
 import { routes } from './app-routing.module'
 
@@ -38,11 +35,8 @@ effectProvidersForWorkaround.forEach((p) => (p.ɵprov.providedIn = null))
 @NgModule({
   declarations: [AppEntrypointComponent],
   imports: [
-    ...commonImports,
     AngularAcceleratorModule,
     RouterModule.forRoot(routes),
-    SharedModule,
-    BrowserModule,
     BrowserAnimationsModule,
     AngularAuthModule,
     ShellCoreModule,
