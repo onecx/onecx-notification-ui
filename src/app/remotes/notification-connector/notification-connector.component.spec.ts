@@ -118,6 +118,15 @@ describe('OneCXNotificationConnectorComponent', () => {
     expect(connectSpy).toHaveBeenCalledWith('http://localhost:8080/bff/eventbus')
   })
 
+  it('should build url correctly when baseUrl ends with slash', () => {
+    const connectSpy = jest.spyOn<any, any>(component, 'connectWebSocket')
+    const configWithSlash: RemoteComponentConfig = { ...mockConfig, baseUrl: 'http://localhost:8080/' }
+
+    component.ocxInitRemoteComponent(configWithSlash)
+
+    expect(connectSpy).toHaveBeenCalledWith('http://localhost:8080/bff/eventbus')
+  })
+
   it('should update token and connect using auth headers and profile', async () => {
     component.ocxInitRemoteComponent(mockConfig)
     await flushPromises()
@@ -206,6 +215,13 @@ describe('OneCXNotificationConnectorComponent', () => {
     expect(destroySpy).toHaveBeenCalled()
   })
 
+  it('should initialize NotificationTopic with proper values', () => {
+    const topic = new NotificationTopic()
+
+    expect(topic).toBeInstanceOf(NotificationTopic)
+    expect(topic['name']).toBe('notification')
+  })
+
   it('should connect without authorization header when not available', async () => {
     authServiceMock.getHeaderValues.mockReturnValue({})
 
@@ -215,5 +231,53 @@ describe('OneCXNotificationConnectorComponent', () => {
     expect(authServiceMock.getHeaderValues).toHaveBeenCalled()
     expect(component['recreateSockJsClient']).toHaveBeenCalledWith('test-user', '')
     expect(mockSocketClient.connect).toHaveBeenCalledWith('http://localhost:8080/bff/eventbus')
+  })
+
+  describe('recreateSockJsClient', () => {
+    let SockJsModule: any
+    let clientSpy: any
+    let sendMock: jest.Mock
+    let capturedConfig: any
+    let compModule: any
+    let recreateFn: any
+
+    beforeEach(() => {
+      jest.resetModules()
+      SockJsModule = require('../../shared/utils/sockjs.utils')
+      sendMock = jest.fn()
+      clientSpy = { send: sendMock, close: jest.fn() }
+      capturedConfig = undefined
+      jest.spyOn(SockJsModule, 'SockJsRxClient').mockImplementation(function (this: any, config: any) {
+        capturedConfig = config
+        return clientSpy
+      })
+
+      compModule = require('./notification-connector.component')
+      recreateFn = compModule.OneCXNotificationConnectorComponent.prototype.recreateSockJsClient
+    })
+
+    it('calls send(register) on open with correct payload', () => {
+      const ctx: any = Object.create(compModule.OneCXNotificationConnectorComponent.prototype)
+      ctx.logger = { info: jest.fn() }
+
+      recreateFn.call(ctx, 'uid-999', 'tok-abc')
+      capturedConfig.onOpen()
+
+      expect(sendMock).toHaveBeenCalledWith({
+        type: 'register',
+        address: 'notifications.onecx.new.uid-999',
+        token: 'tok-abc'
+      })
+    })
+
+    it('logs on close via logger.info', () => {
+      const ctx: any = Object.create(compModule.OneCXNotificationConnectorComponent.prototype)
+      ctx.logger = { info: jest.fn() }
+
+      recreateFn.call(ctx, 'uid-000', 'tok-zzz')
+      capturedConfig.onClose()
+
+      expect(ctx.logger.info).toHaveBeenCalledWith('WebSocket connection closed')
+    })
   })
 })
