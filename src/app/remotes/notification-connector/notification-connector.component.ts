@@ -1,5 +1,5 @@
-import { ChangeDetectionStrategy, Component, Input, OnDestroy, inject } from '@angular/core'
-import { UntilDestroy, untilDestroyed } from '@ngneat/until-destroy'
+import { Component, Input, inject, DestroyRef, ChangeDetectionStrategy } from '@angular/core'
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop'
 import { Observable, defer, from, timer } from 'rxjs'
 import { retry, switchMap } from 'rxjs/operators'
 
@@ -20,13 +20,6 @@ interface RegisterMessage {
   type: 'register'
   address: string
   token: string
-}
-
-export interface RawNotification {
-  type: 'rec'
-  address: string
-  headers: { [key: string]: string }
-  body: string
 }
 
 export interface RawNotification {
@@ -68,8 +61,8 @@ export class NotificationTopic extends Topic<Notification> {
   imports: [AngularRemoteComponentsModule],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-@UntilDestroy()
-export class OneCXNotificationConnectorComponent implements OnDestroy, ocxRemoteComponent, ocxRemoteWebcomponent {
+export class OneCXNotificationConnectorComponent implements ocxRemoteComponent, ocxRemoteWebcomponent {
+  private readonly destroyRef = inject(DestroyRef)
   private sockJsClient?: SockJsRxClient<RawNotification | RegisterMessage, RegisterMessage>
   private readonly reconnectDelay = 5000
   private _notificationTopic?: NotificationTopic
@@ -83,6 +76,13 @@ export class OneCXNotificationConnectorComponent implements OnDestroy, ocxRemote
 
   @Input() set ocxRemoteComponentConfig(config: RemoteComponentConfig) {
     this.ocxInitRemoteComponent(config)
+  }
+
+  constructor() {
+    this.destroyRef.onDestroy(() => {
+      this.sockJsClient?.close()
+      this._notificationTopic?.destroy()
+    })
   }
 
   ocxInitRemoteComponent(remoteComponentConfig: RemoteComponentConfig) {
@@ -101,7 +101,7 @@ export class OneCXNotificationConnectorComponent implements OnDestroy, ocxRemote
             return timer(this.reconnectDelay)
           }
         }),
-        untilDestroyed(this)
+        takeUntilDestroyed(this.destroyRef)
       )
       .subscribe((notification) => this.handleIncomingNotification(notification))
   }
@@ -160,10 +160,5 @@ export class OneCXNotificationConnectorComponent implements OnDestroy, ocxRemote
 
     this.logger.info('Received notification(rec):', parsedNotification)
     this.notificationTopic.publish(parsedNotification)
-  }
-
-  ngOnDestroy(): void {
-    this.sockJsClient?.close()
-    this._notificationTopic?.destroy()
   }
 }
