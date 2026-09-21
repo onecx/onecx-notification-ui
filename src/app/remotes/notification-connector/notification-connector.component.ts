@@ -1,5 +1,4 @@
-import { CommonModule } from '@angular/common'
-import { Component, Input, inject, DestroyRef } from '@angular/core'
+import { Component, Input, inject, DestroyRef, ChangeDetectionStrategy } from '@angular/core'
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop'
 import { Observable, defer, from, timer } from 'rxjs'
 import { retry, switchMap } from 'rxjs/operators'
@@ -58,10 +57,9 @@ export class NotificationTopic extends Topic<Notification> {
 
 @Component({
   selector: 'app-notification-connector',
-  standalone: true,
   template: '',
-  imports: [AngularRemoteComponentsModule, CommonModule],
-  providers: []
+  imports: [AngularRemoteComponentsModule],
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class OneCXNotificationConnectorComponent implements ocxRemoteComponent, ocxRemoteWebcomponent {
   private readonly destroyRef = inject(DestroyRef)

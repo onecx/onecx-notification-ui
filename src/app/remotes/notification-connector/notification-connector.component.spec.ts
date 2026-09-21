@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common'
 import { provideHttpClient } from '@angular/common/http'
 import { provideHttpClientTesting } from '@angular/common/http/testing'
 import { TestBed } from '@angular/core/testing'
@@ -52,7 +51,7 @@ describe('OneCXNotificationConnectorComponent', () => {
     }
 
     await TestBed.configureTestingModule({
-      imports: [OneCXNotificationConnectorComponent, CommonModule],
+      imports: [OneCXNotificationConnectorComponent],
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
