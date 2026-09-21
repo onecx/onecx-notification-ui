@@ -1,4 +1,5 @@
-/* You can add global styles to this file, and also import other style files */
+/* global styles */
+@use 'node_modules/primeicons/primeicons.css';
+@use 'node_modules/primeflex/primeflex.scss';
 
-@import 'node_modules/primeicons/primeicons.css';
-@import 'node_modules/primeflex/primeflex.scss';
+@use 'node_modules/@onecx/angular-accelerator/assets/styles.scss';

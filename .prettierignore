@@ -1,5 +1,4 @@
 # Add files here to ignore them from prettier formatting
-.nx
 .angular
 .husky
 .docusaurus
@@ -21,3 +20,4 @@ Dockerfile
 *.log
 *.sh
 src/app/shared/generated/**
+src/assets/api

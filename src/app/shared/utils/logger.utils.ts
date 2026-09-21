@@ -1,8 +1,8 @@
-import debug, { type Debugger } from "debug";
+import debug, { type Debugger } from 'debug'
 
-export const createLogger = createLoggerFactory("onecx-notification-ui");
+export const createLogger = createLoggerFactory('onecx-notification-ui')
 
-export type LogLevel = "debug" | "info" | "warn" | "error";
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 
 /**
  * Logger for a single component.
@@ -12,16 +12,16 @@ export type LogLevel = "debug" | "info" | "warn" | "error";
  */
 export interface ComponentLogger {
   /** Logs with namespace `<libName>:<location>:debug`. */
-  debug: Debugger;
+  debug: Debugger
 
   /** Logs with namespace `<libName>:<location>:info`. */
-  info: Debugger;
+  info: Debugger
 
   /** Logs with namespace `<libName>:<location>:warn`. */
-  warn: Debugger;
+  warn: Debugger
 
   /** Logs with namespace `<libName>:<location>:error`. */
-  error: Debugger;
+  error: Debugger
 }
 
 /**
@@ -37,10 +37,10 @@ export interface ComponentLogger {
  * log.warn("token missing");
  * ```
  */
-export type CreateLogger = (location: string) => ComponentLogger;
+export type CreateLogger = (location: string) => ComponentLogger
 
 // Bind debug.log to console.log for proper output
-debug.log = console.log.bind(console);
+debug.log = console.log.bind(console)
 
 /**
  * Creates a {@link CreateLogger} function for a given library name.
@@ -52,8 +52,8 @@ debug.log = console.log.bind(console);
  * @returns A function that creates component loggers.
  */
 export function createLoggerFactory(libOrAppName: string): CreateLogger {
-  const prefix = libOrAppName.trim();
-  if (!prefix) throw new Error("createLoggerFactory(libOrAppName): libOrAppName must be a non-empty string.");
+  const prefix = libOrAppName.trim()
+  if (!prefix) throw new Error('createLoggerFactory(libOrAppName): libOrAppName must be a non-empty string.')
 
   /**
    * Creates a logger for a specific location.
@@ -62,18 +62,18 @@ export function createLoggerFactory(libOrAppName: string): CreateLogger {
    * provided via the {@link CreateLogger} type so editors can show it in IntelliSense.
    */
   const createLogger: CreateLogger = (location: string) => {
-    const trimmedLocation = location.trim();
-    if (!trimmedLocation) throw new Error("createLogger(location): location must be a non-empty string.");
+    const trimmedLocation = location.trim()
+    if (!trimmedLocation) throw new Error('createLogger(location): location must be a non-empty string.')
 
-    const ns = (level: LogLevel) => `${prefix}:${trimmedLocation}:${level}`;
+    const ns = (level: LogLevel) => `${prefix}:${trimmedLocation}:${level}`
 
     return {
-      debug: debug(ns("debug")),
-      info: debug(ns("info")),
-      warn: debug(ns("warn")),
-      error: debug(ns("error")),
-    };
-  };
+      debug: debug(ns('debug')),
+      info: debug(ns('info')),
+      warn: debug(ns('warn')),
+      error: debug(ns('error'))
+    }
+  }
 
-  return createLogger;
+  return createLogger
 }

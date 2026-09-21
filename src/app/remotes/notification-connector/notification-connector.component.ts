@@ -1,11 +1,11 @@
 import { CommonModule } from '@angular/common'
 import { Component, Input, OnDestroy, inject } from '@angular/core'
 import { UntilDestroy, untilDestroyed } from '@ngneat/until-destroy'
-import { Topic } from '@onecx/accelerator'
-import { AuthProxyService } from '@onecx/angular-auth'
 import { Observable, defer, from, timer } from 'rxjs'
 import { retry, switchMap } from 'rxjs/operators'
 
+import { Topic } from '@onecx/accelerator'
+import { AuthProxyService } from '@onecx/angular-auth'
 import { UserService } from '@onecx/angular-integration-interface'
 import {
   AngularRemoteComponentsModule,
@@ -13,44 +13,47 @@ import {
   ocxRemoteComponent,
   ocxRemoteWebcomponent
 } from '@onecx/angular-remote-components'
+
 import { createLogger } from 'src/app/shared/utils/logger.utils'
 import { SockJsRxClient } from '../../shared/utils/sockjs.utils'
 
 interface RegisterMessage {
-  type: 'register',
-  address: string,
+  type: 'register'
+  address: string
   token: string
 }
 
 export interface RawNotification {
   type: 'rec'
-  address: string;
+  address: string
   headers: { [key: string]: string }
-  body: string;
+  body: string
 }
 
 export interface RawNotification {
   type: 'rec'
-  address: string;
+  address: string
   headers: { [key: string]: string }
-  body: string;
+  body: string
 }
 
 export interface Notification {
-  type: string,
-  address: string,
+  type: string
+  address: string
   headers: { [key: string]: string }
   body: {
-    id: string,
-    applicationId: string,
-    senderId: string,
-    receiverId: string,
-    persist: boolean,
-    creationData: Date,
-    contentMeta: [{
-      key: string,
-      value: string
-    }]
+    id: string
+    applicationId: string
+    senderId: string
+    receiverId: string
+    persist: boolean
+    creationData: Date
+    contentMeta: [
+      {
+        key: string
+        value: string
+      }
+    ]
   }
 }
 
@@ -78,8 +81,7 @@ export class OneCXNotificationConnectorComponent implements OnDestroy, ocxRemote
   }
   private readonly authService = inject(AuthProxyService)
   private readonly userService = inject(UserService)
-  private readonly logger = createLogger("NotificationConnectorComponent")
-
+  private readonly logger = createLogger('NotificationConnectorComponent')
 
   @Input() set ocxRemoteComponentConfig(config: RemoteComponentConfig) {
     this.ocxInitRemoteComponent(config)
@@ -129,7 +131,10 @@ export class OneCXNotificationConnectorComponent implements OnDestroy, ocxRemote
     return authorization.replace(/^Bearer\s+/i, '')
   }
 
-  private recreateSockJsClient(userId: string, token: string): SockJsRxClient<RawNotification | RegisterMessage, RegisterMessage> {
+  private recreateSockJsClient(
+    userId: string,
+    token: string
+  ): SockJsRxClient<RawNotification | RegisterMessage, RegisterMessage> {
     this.sockJsClient?.close()
     this.sockJsClient = new SockJsRxClient<RawNotification | RegisterMessage, RegisterMessage>({
       onOpen: () => {
@@ -154,7 +159,7 @@ export class OneCXNotificationConnectorComponent implements OnDestroy, ocxRemote
       ...notification,
       body
     }
-    
+
     this.logger.info('Received notification(rec):', parsedNotification)
     this.notificationTopic.publish(parsedNotification)
   }

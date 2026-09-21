@@ -9,7 +9,12 @@ import { UserService } from '@onecx/angular-integration-interface'
 import { FakeTopic } from '@onecx/angular-integration-interface/mocks'
 import { RemoteComponentConfig } from '@onecx/angular-remote-components'
 
-import { Notification, NotificationTopic, OneCXNotificationConnectorComponent, RawNotification } from './notification-connector.component'
+import {
+  Notification,
+  NotificationTopic,
+  OneCXNotificationConnectorComponent,
+  RawNotification
+} from './notification-connector.component'
 
 describe('OneCXNotificationConnectorComponent', () => {
   let component: OneCXNotificationConnectorComponent
@@ -211,6 +216,4 @@ describe('OneCXNotificationConnectorComponent', () => {
     expect(component['recreateSockJsClient']).toHaveBeenCalledWith('test-user', '')
     expect(mockSocketClient.connect).toHaveBeenCalledWith('http://localhost:8080/bff/eventbus')
   })
-
-
 })
