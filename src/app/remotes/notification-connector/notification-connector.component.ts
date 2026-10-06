@@ -159,6 +159,6 @@ export class OneCXNotificationConnectorComponent implements ocxRemoteComponent, 
     }
 
     this.logger.info('Received notification(rec):', parsedNotification)
-    this.notificationTopic.publish(parsedNotification)
+    void this.notificationTopic.publish(parsedNotification)
   }
 }

@@ -12,7 +12,7 @@ import { bootstrapRemoteComponent } from '@onecx/angular-webcomponents'
 import { environment } from 'src/environments/environment'
 import { OneCXNotificationConnectorComponent } from './notification-connector.component'
 
-bootstrapRemoteComponent(
+void bootstrapRemoteComponent(
   OneCXNotificationConnectorComponent,
   'ocx-notification-connector-component',
   environment.production,
