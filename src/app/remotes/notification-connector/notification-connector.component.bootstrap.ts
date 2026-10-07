@@ -12,7 +12,7 @@ import { bootstrapRemoteComponent } from '@onecx/angular-webcomponents'
 import { environment } from 'src/environments/environment'
 import { OneCXNotificationConnectorComponent } from './notification-connector.component'
 
-void bootstrapRemoteComponent(
+bootstrapRemoteComponent(
   OneCXNotificationConnectorComponent,
   'ocx-notification-connector-component',
   environment.production,
@@ -31,4 +31,4 @@ void bootstrapRemoteComponent(
     }),
     provideThemeConfig()
   ]
-)
+).catch((err) => console.error(err))
