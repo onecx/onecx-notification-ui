@@ -24,6 +24,7 @@ interface RegisterFrame {
 }
 
 class DeferredBroadcastChannel implements BroadcastChannel {
+  public static readonly instances: DeferredBroadcastChannel[] = []
   public onmessage: ((this: BroadcastChannel, event: MessageEvent) => unknown) | null = null
   public onmessageerror: ((this: BroadcastChannel, event: MessageEvent) => unknown) | null = null
   public onopen: ((this: BroadcastChannel, event: Event) => unknown) | null = null
@@ -32,7 +33,9 @@ class DeferredBroadcastChannel implements BroadcastChannel {
   public closed = false
   public eventListenerCount = 0
   public started = false
-  constructor(public readonly name: string) {}
+  constructor(public readonly name: string) {
+    DeferredBroadcastChannel.instances.push(this)
+  }
   close(): void {
     this.closed = true
   }
@@ -151,6 +154,7 @@ describe('OneCXNotificationConnectorComponent', () => {
     socketStreams.forEach((stream) => stream.complete())
     userServiceMock.profile$.complete()
     jest.restoreAllMocks()
+    DeferredBroadcastChannel.instances.length = 0
     if (originalStorageDescriptor) Object.defineProperty(window, 'sessionStorage', originalStorageDescriptor)
     else Reflect.deleteProperty(window, 'sessionStorage')
     if (originalBroadcastChannelDescriptor) {
@@ -213,6 +217,17 @@ describe('OneCXNotificationConnectorComponent', () => {
     expect(sentMessages[1]).toEqual(sentMessages[0])
   })
 
+  it('should use the resolved ID if the current identity is unavailable on socket open', async () => {
+    initFixture()
+    component.ocxInitRemoteComponent(mockConfig)
+    await settlePromises()
+    jest.spyOn(component['sessionIdentity'], 'getCurrentId').mockReturnValue(undefined)
+
+    triggerSocketOpen()
+
+    expect(sentMessages[0]?.sessionId).toMatch(/^[a-f0-9]{32}$/)
+  })
+
   it('should reuse the session ID after the socket reconnects', async () => {
     initFixture()
     component.ocxInitRemoteComponent(mockConfig)
@@ -260,6 +275,29 @@ describe('OneCXNotificationConnectorComponent', () => {
     expect(connectSpy).not.toHaveBeenCalled()
   })
 
+  it('should re-register with a new identity after a late owner reply', async () => {
+    originalBroadcastChannelDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'BroadcastChannel')
+    Object.defineProperty(globalThis, 'BroadcastChannel', { configurable: true, value: DeferredBroadcastChannel })
+    jest.useFakeTimers()
+    initFixture()
+    component.ocxInitRemoteComponent(mockConfig)
+    await jest.advanceTimersByTimeAsync(250)
+    await settlePromises()
+    triggerSocketOpen()
+    const channel = DeferredBroadcastChannel.instances[0]
+    const claim = channel?.messages[0] as { sessionId: string; nonce: string }
+
+    channel?.onmessage?.call(channel, {
+      data: { type: 'owner', sessionId: claim.sessionId, to: claim.nonce }
+    } as MessageEvent)
+    await jest.advanceTimersByTimeAsync(250)
+
+    expect(sentMessages).toHaveLength(2)
+    expect(sentMessages[1]?.sessionId).not.toBe(sentMessages[0]?.sessionId)
+    expect(sentMessages[1]?.address).toBe(sentMessages[0]?.address)
+    expect(sentMessages[1]?.token).toBe(sentMessages[0]?.token)
+  })
+
   it('should not register after the connector has been destroyed', async () => {
     initFixture()
     component.ocxInitRemoteComponent(mockConfig)
@@ -267,6 +305,27 @@ describe('OneCXNotificationConnectorComponent', () => {
     fixture.destroy()
 
     triggerSocketOpen()
+    component['registerWithSessionId']('replacement-session')
+    component['sendRegisterMessage']('test-user', 'mock-token', 'replacement-session')
+
+    expect(sentMessages).toHaveLength(0)
+  })
+
+  it('should not send an identity update before the socket opens', async () => {
+    initFixture()
+    component.ocxInitRemoteComponent(mockConfig)
+    await settlePromises()
+
+    component['registerWithSessionId']('replacement-session')
+
+    expect(sentMessages).toHaveLength(0)
+  })
+
+  it('should not send an identity update without register context', () => {
+    initFixture()
+    component['socketOpen'] = true
+
+    component['registerWithSessionId']('replacement-session')
 
     expect(sentMessages).toHaveLength(0)
   })

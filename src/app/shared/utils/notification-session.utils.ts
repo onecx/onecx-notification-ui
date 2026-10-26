@@ -17,14 +17,19 @@ export interface NotificationSessionIdentityOptions {
   fillRandomValues?: (values: Uint8Array) => Uint8Array
   logger?: { warn: (message: string, ...details: unknown[]) => void }
   discoveryWindowMs?: number
+  /** Called when a late owner claim changes the resolved ID. */
+  onIdChange?: (sessionId: string) => void
 }
 
 /**
  * Resolves one stable notification identity per browser tab runtime.
  *
  * The identity is persisted in tab-scoped session storage and protected against
- * duplicated tabs by a Web Lock or BroadcastChannel claim. Call {@link destroy}
- * when the owning connector is destroyed to release cross-tab ownership.
+ * duplicated tabs by a Web Lock or BroadcastChannel claim. Delayed BroadcastChannel
+ * claims can replace an already-resolved ID. If coordination is unavailable, the
+ * stored ID is still reused, but duplicate detection cannot be guaranteed. Call
+ * {@link destroy} when the owning connector is destroyed to release ownership;
+ * ownership remains active while the page is in the back-forward cache.
  */
 export class NotificationSessionIdentity {
   private readonly logger: { warn: (message: string, ...details: unknown[]) => void }
@@ -35,7 +40,40 @@ export class NotificationSessionIdentity {
   private cancelDiscovery?: () => void
   private destroyed = false
   private contenderNonce = ''
-  private readonly onPageHide = () => this.destroy()
+  private broadcastCandidate = ''
+  private broadcastContested = false
+  private broadcastResolved = false
+  private lateClaimInProgress = false
+  private readonly onPageHide = (event: PageTransitionEvent) => {
+    if (!event.persisted) this.destroy()
+  }
+  private readonly onBroadcastMessage = ({ data }: MessageEvent<SessionMessage>): void => {
+    const candidate = this.broadcastCandidate
+    if (!data || typeof data !== 'object' || data.sessionId !== candidate) return
+
+    if (data.type === 'claim') {
+      if (this.sessionId === candidate && this.broadcastResolved) {
+        this.broadcastChannel?.postMessage({
+          type: 'owner',
+          sessionId: candidate,
+          to: data.nonce
+        } satisfies SessionMessage)
+      } else if (data.nonce < this.contenderNonce) {
+        this.broadcastContested = true
+      } else if (data.nonce > this.contenderNonce) {
+        this.broadcastChannel?.postMessage({
+          type: 'winner',
+          sessionId: candidate,
+          to: data.nonce,
+          nonce: this.contenderNonce
+        } satisfies SessionMessage)
+      }
+    } else if (data.type === 'owner' && data.to === this.contenderNonce) {
+      this.handleBroadcastCollision()
+    } else if (data.type === 'winner' && data.to === this.contenderNonce && data.nonce < this.contenderNonce) {
+      if (!this.broadcastResolved) this.broadcastContested = true
+    }
+  }
 
   constructor(private readonly options: NotificationSessionIdentityOptions = {}) {
     this.logger = options.logger ?? createLogger('NotificationSessionIdentity')
@@ -46,6 +84,11 @@ export class NotificationSessionIdentity {
   public resolveId(): Promise<string> {
     this.resolvePromise ??= this.resolveIdentity()
     return this.resolvePromise
+  }
+
+  /** Returns the latest claimed ID, including one assigned after a late tab claim. */
+  public getCurrentId(): string | undefined {
+    return this.sessionId
   }
 
   /** Releases the lock/channel without removing the persisted tab identity. */
@@ -89,7 +132,8 @@ export class NotificationSessionIdentity {
       return claimedId
     } catch (error) {
       this.logger.warn('Cross-tab coordination unavailable for notification session identity', error)
-      this.sessionId = this.createId()
+      this.sessionId = candidate
+      this.writeStoredId(candidate)
       return this.sessionId
     }
   }
@@ -169,58 +213,90 @@ export class NotificationSessionIdentity {
   }
 
   private async claimBroadcastChannel(candidate: string): Promise<string> {
+    if (this.destroyed) return candidate
     const createChannel = this.options.createBroadcastChannel ?? ((name) => new BroadcastChannel(name))
     const discoveryWindowMs = this.options.discoveryWindowMs ?? DISCOVERY_WINDOW_MS
+    const channel = createChannel(BROADCAST_CHANNEL_NAME)
+    this.closeBroadcastChannel()
+    this.broadcastChannel = channel
+    channel.onmessage = this.onBroadcastMessage
 
     while (!this.destroyed) {
-      const channel = createChannel(BROADCAST_CHANNEL_NAME)
-      this.closeBroadcastChannel()
-      this.broadcastChannel = channel
+      this.broadcastCandidate = candidate
       this.contenderNonce = this.createId()
-      let contested = false
-
-      channel.onmessage = ({ data }: MessageEvent<SessionMessage>) => {
-        if (!data || typeof data !== 'object' || data.sessionId !== candidate) return
-
-        if (data.type === 'claim') {
-          if (this.sessionId === candidate) {
-            channel.postMessage({ type: 'owner', sessionId: candidate, to: data.nonce } satisfies SessionMessage)
-          } else if (data.nonce < this.contenderNonce) {
-            contested = true
-          } else if (data.nonce > this.contenderNonce) {
-            channel.postMessage({
-              type: 'winner',
-              sessionId: candidate,
-              to: data.nonce,
-              nonce: this.contenderNonce
-            } satisfies SessionMessage)
-          }
-        } else if (data.type === 'owner' && data.to === this.contenderNonce) {
-          contested = true
-        } else if (data.type === 'winner' && data.to === this.contenderNonce && data.nonce < this.contenderNonce) {
-          contested = true
-        }
-      }
-
+      this.broadcastContested = false
       channel.postMessage({ type: 'claim', sessionId: candidate, nonce: this.contenderNonce } satisfies SessionMessage)
-
-      await new Promise<void>((resolve) => {
-        const timer = setTimeout(resolve, discoveryWindowMs)
-        this.cancelDiscovery = () => {
-          clearTimeout(timer)
-          resolve()
-        }
-      })
-      this.cancelDiscovery = undefined
+      await this.waitForDiscovery(discoveryWindowMs)
 
       if (this.destroyed) return candidate
-      if (!contested) return candidate
+      if (!this.broadcastContested) {
+        this.broadcastResolved = true
+        return candidate
+      }
 
       candidate = this.createId()
       this.writeStoredId(candidate)
     }
 
     return candidate
+  }
+
+  private waitForDiscovery(discoveryWindowMs: number): Promise<void> {
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        this.cancelDiscovery = undefined
+        resolve()
+      }, discoveryWindowMs)
+      this.cancelDiscovery = () => {
+        clearTimeout(timer)
+        this.cancelDiscovery = undefined
+        resolve()
+      }
+    })
+  }
+
+  private handleBroadcastCollision(): void {
+    if (!this.broadcastResolved) {
+      this.broadcastContested = true
+      return
+    }
+    void this.claimReplacementBroadcastId()
+  }
+
+  private async claimReplacementBroadcastId(): Promise<void> {
+    if (this.lateClaimInProgress || this.destroyed || !this.broadcastChannel) return
+    this.lateClaimInProgress = true
+    this.broadcastResolved = false
+    let candidate = this.createId()
+    const discoveryWindowMs = this.options.discoveryWindowMs ?? DISCOVERY_WINDOW_MS
+
+    try {
+      while (!this.destroyed) {
+        this.broadcastCandidate = candidate
+        this.contenderNonce = this.createId()
+        this.broadcastContested = false
+        this.writeStoredId(candidate)
+        this.broadcastChannel.postMessage({
+          type: 'claim',
+          sessionId: candidate,
+          nonce: this.contenderNonce
+        } satisfies SessionMessage)
+        await this.waitForDiscovery(discoveryWindowMs)
+
+        if (this.destroyed) return
+        if (!this.broadcastContested) {
+          const previousId = this.sessionId
+          this.sessionId = candidate
+          this.broadcastResolved = true
+          if (previousId !== candidate) this.options.onIdChange?.(candidate)
+          return
+        }
+
+        candidate = this.createId()
+      }
+    } finally {
+      this.lateClaimInProgress = false
+    }
   }
 
   private closeBroadcastChannel(): void {

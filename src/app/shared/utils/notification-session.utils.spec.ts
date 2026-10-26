@@ -187,6 +187,13 @@ describe('NotificationSessionIdentity', () => {
     jest.useRealTimers()
   })
 
+  it('should construct without explicit options', () => {
+    const identity = new NotificationSessionIdentity()
+
+    expect(identity.getCurrentId()).toBeUndefined()
+    identity.destroy()
+  })
+
   it('should retain the stored ID after a simulated reload', async () => {
     const storage = new MemoryStorage()
     const lockManager = new FakeLockManager()
@@ -535,7 +542,7 @@ describe('NotificationSessionIdentity', () => {
     identity.destroy()
   })
 
-  it('should use a runtime-only identity when storage and coordination are unavailable', async () => {
+  it('should retain and persist the stored identity when coordination is unavailable', async () => {
     const warn = jest.fn()
     const storedId = 'c'.repeat(32)
     const storage = new MemoryStorage()
@@ -552,13 +559,152 @@ describe('NotificationSessionIdentity', () => {
 
     const sessionId = await identity.resolveId()
 
-    expect(sessionId).not.toBe(storedId)
+    expect(sessionId).toBe(storedId)
     expect(storage.getItem('onecx.notification.sessionId')).toBe(storedId)
     expect(warn).toHaveBeenCalledWith(
       'Cross-tab coordination unavailable for notification session identity',
       expect.any(Error)
     )
     identity.destroy()
+  })
+
+  it('should persist a new identity for reload when coordination is unavailable', async () => {
+    const storage = new MemoryStorage()
+    const options = makeOptions({
+      getStorage: () => storage,
+      createBroadcastChannel: () => {
+        throw new Error('channel unavailable')
+      }
+    })
+    const firstRuntime = new NotificationSessionIdentity(options)
+    const firstId = await firstRuntime.resolveId()
+    firstRuntime.destroy()
+
+    const reloadedRuntime = new NotificationSessionIdentity(options)
+
+    expect(await reloadedRuntime.resolveId()).toBe(firstId)
+    reloadedRuntime.destroy()
+  })
+
+  it('should change identity when an owner reply arrives after initial discovery', async () => {
+    const storage = new MemoryStorage()
+    const channelInstances: FakeBroadcastChannel[] = []
+    const onIdChange = jest.fn()
+    const identity = new NotificationSessionIdentity(
+      makeOptions({
+        getStorage: () => storage,
+        createBroadcastChannel: (name) => {
+          const channel = new FakeBroadcastChannel(name)
+          channelInstances.push(channel)
+          return channel
+        },
+        onIdChange
+      })
+    )
+    const resolution = identity.resolveId()
+    await jest.advanceTimersByTimeAsync(250)
+    const originalId = await resolution
+    const channel = channelInstances[0]
+    const claim = channel?.messages[0] as { nonce: string }
+
+    channel?.onmessage?.call(channel, {
+      data: { type: 'owner', sessionId: originalId, to: claim.nonce }
+    } as MessageEvent)
+    const replacementClaim = channel?.messages.slice(-1)[0] as { sessionId: string; nonce: string }
+    channel?.onmessage?.call(channel, {
+      data: { type: 'owner', sessionId: replacementClaim.sessionId, to: replacementClaim.nonce }
+    } as MessageEvent)
+    await jest.advanceTimersByTimeAsync(500)
+
+    expect(identity.getCurrentId()).not.toBe(originalId)
+    expect(storage.getItem('onecx.notification.sessionId')).toBe(identity.getCurrentId())
+    expect(onIdChange).toHaveBeenCalledWith(identity.getCurrentId())
+    identity.destroy()
+  })
+
+  it('should stop a replacement claim when destroyed before discovery completes', async () => {
+    const storage = new MemoryStorage()
+    const identity = new NotificationSessionIdentity(
+      makeOptions({
+        getStorage: () => storage,
+        createBroadcastChannel: (name) => new FakeBroadcastChannel(name),
+        onIdChange: jest.fn()
+      })
+    )
+    const resolution = identity.resolveId()
+    await jest.advanceTimersByTimeAsync(250)
+    const originalId = await resolution
+    const replacement = identity['claimReplacementBroadcastId']()
+    const duplicateReplacement = identity['claimReplacementBroadcastId']()
+    identity.destroy()
+    await Promise.all([replacement, duplicateReplacement])
+
+    expect(identity.getCurrentId()).toBe(originalId)
+  })
+
+  it('should stop retrying when destroyed while selecting a replacement ID', async () => {
+    const channelInstances: FakeBroadcastChannel[] = []
+    let randomCalls = 0
+    let destroyIdentity: () => void = () => undefined
+    const identity = new NotificationSessionIdentity(
+      makeOptions({
+        getStorage: () => new MemoryStorage(),
+        createBroadcastChannel: (name) => {
+          const channel = new FakeBroadcastChannel(name)
+          channelInstances.push(channel)
+          return channel
+        },
+        fillRandomValues: (values) => {
+          values.fill(++randomCalls)
+          if (randomCalls === 3) destroyIdentity()
+          return values
+        }
+      })
+    )
+    destroyIdentity = () => identity.destroy()
+    const resolution = identity.resolveId()
+    const channel = channelInstances[0]
+    const claim = channel?.messages[0] as { sessionId: string; nonce: string }
+    channel?.onmessage?.call(channel, {
+      data: { type: 'owner', sessionId: claim.sessionId, to: claim.nonce }
+    } as MessageEvent)
+    await jest.advanceTimersByTimeAsync(250)
+
+    expect(await resolution).toMatch(/^[a-f0-9]{32}$/)
+  })
+
+  it('should keep ownership when the page enters the back-forward cache', async () => {
+    const storage = new MemoryStorage()
+    const channelInstances: FakeBroadcastChannel[] = []
+    const createBroadcastChannel = (name: string) => {
+      const channel = new FakeBroadcastChannel(name)
+      channelInstances.push(channel)
+      return channel
+    }
+    const incumbent = new NotificationSessionIdentity(
+      makeOptions({ getStorage: () => storage, createBroadcastChannel })
+    )
+    const incumbentPromise = incumbent.resolveId()
+    await jest.advanceTimersByTimeAsync(250)
+    const incumbentId = await incumbentPromise
+    const pageHideEvent = new Event('pagehide')
+    Object.defineProperty(pageHideEvent, 'persisted', { value: true })
+
+    window.dispatchEvent(pageHideEvent)
+
+    const duplicateStorage = new MemoryStorage()
+    duplicateStorage.setItem('onecx.notification.sessionId', incumbentId)
+    const duplicate = new NotificationSessionIdentity(
+      makeOptions({ getStorage: () => duplicateStorage, createBroadcastChannel })
+    )
+    const duplicatePromise = duplicate.resolveId()
+    await jest.advanceTimersByTimeAsync(500)
+
+    expect(channelInstances[0]?.closed).toBe(false)
+    expect(await duplicatePromise).not.toBe(incumbentId)
+    expect(await incumbent.resolveId()).toBe(incumbentId)
+    incumbent.destroy()
+    duplicate.destroy()
   })
 
   it('should close the channel and cancel pending ownership discovery on destruction', async () => {
