@@ -95,6 +95,22 @@ class ThrowingLockManager extends FakeLockManager {
   }
 }
 
+class CollisionThenRejectLockManager extends FakeLockManager {
+  private requests = 0
+
+  override request<T>(name: string, callback: LockGrantedCallback): Promise<T>
+  override request<T>(name: string, options: LockOptions, callback: LockGrantedCallback): Promise<T>
+  override request<T>(
+    _name: string,
+    optionsOrCallback: LockOptions | LockGrantedCallback,
+    optionalCallback?: LockGrantedCallback
+  ): Promise<T> {
+    const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : optionalCallback!
+    if (this.requests++ === 0) return Promise.resolve(callback(null) as T)
+    return Promise.reject(new Error('lock request rejected after collision'))
+  }
+}
+
 class DeferredLockManager extends FakeLockManager {
   override request<T>(name: string, callback: LockGrantedCallback): Promise<T>
   override request<T>(name: string, options: LockOptions, callback: LockGrantedCallback): Promise<T>
@@ -518,6 +534,195 @@ describe('NotificationSessionIdentity', () => {
     expect(await resolution).toMatch(/^[a-f0-9]{32}$/)
   })
 
+  it('should reconcile ownership when the page is restored before its initial identity resolves', async () => {
+    const channelInstances: FakeBroadcastChannel[] = []
+    const identity = new NotificationSessionIdentity(
+      makeOptions({
+        getStorage: () => new MemoryStorage(),
+        createBroadcastChannel: (name) => {
+          const channel = new FakeBroadcastChannel(name)
+          channelInstances.push(channel)
+          return channel
+        }
+      })
+    )
+    const resolution = identity.resolveId()
+    const pageHideEvent = new Event('pagehide')
+    Object.defineProperty(pageHideEvent, 'persisted', { value: true })
+    identity['onPageHide'](pageHideEvent as PageTransitionEvent)
+    const pageShowEvent = new Event('pageshow')
+    Object.defineProperty(pageShowEvent, 'persisted', { value: true })
+    identity['onPageShow'](pageShowEvent as PageTransitionEvent)
+
+    await jest.advanceTimersByTimeAsync(500)
+
+    expect(await resolution).toMatch(/^[a-f0-9]{32}$/)
+    expect(channelInstances).toHaveLength(2)
+    expect(channelInstances[0]?.closed).toBe(true)
+    identity.destroy()
+  })
+
+  it('should claim a different Web Lock identity when another tab takes the cached identity', async () => {
+    const storage = new MemoryStorage()
+    const duplicateStorage = new MemoryStorage()
+    const lockManager = new FakeLockManager()
+    const onIdChange = jest.fn()
+    const original = new NotificationSessionIdentity(
+      makeOptions({ getStorage: () => storage, lockManager, onIdChange })
+    )
+    const originalId = await original.resolveId()
+    const pageHideEvent = new Event('pagehide')
+    Object.defineProperty(pageHideEvent, 'persisted', { value: true })
+    original['onPageHide'](pageHideEvent as PageTransitionEvent)
+    for (let index = 0; index < 5; index++) await Promise.resolve()
+    duplicateStorage.setItem('onecx.notification.sessionId', originalId)
+    const duplicate = new NotificationSessionIdentity(makeOptions({ getStorage: () => duplicateStorage, lockManager }))
+
+    expect(await duplicate.resolveId()).toBe(originalId)
+    const pageShowEvent = new Event('pageshow')
+    Object.defineProperty(pageShowEvent, 'persisted', { value: true })
+    original['onPageShow'](pageShowEvent as PageTransitionEvent)
+    await jest.advanceTimersByTimeAsync(0)
+
+    expect(original.getCurrentId()).not.toBe(originalId)
+    expect(duplicate.getCurrentId()).toBe(originalId)
+    expect(onIdChange).toHaveBeenCalledWith(original.getCurrentId())
+    original.destroy()
+    duplicate.destroy()
+  })
+
+  it('should retain its identity when cross-tab coordination fails during restoration', async () => {
+    const storage = new MemoryStorage()
+    const warn = jest.fn()
+    let channelCalls = 0
+    const identity = new NotificationSessionIdentity(
+      makeOptions({
+        getStorage: () => storage,
+        createBroadcastChannel: (name) => {
+          if (channelCalls++ > 0) throw new Error('channel unavailable')
+          return new FakeBroadcastChannel(name)
+        },
+        logger: { warn }
+      })
+    )
+    const resolution = identity.resolveId()
+    await jest.advanceTimersByTimeAsync(250)
+    const sessionId = await resolution
+    const pageHideEvent = new Event('pagehide')
+    Object.defineProperty(pageHideEvent, 'persisted', { value: true })
+    identity['onPageHide'](pageHideEvent as PageTransitionEvent)
+    const pageShowEvent = new Event('pageshow')
+    Object.defineProperty(pageShowEvent, 'persisted', { value: true })
+    identity['onPageShow'](pageShowEvent as PageTransitionEvent)
+    await jest.advanceTimersByTimeAsync(0)
+
+    expect(identity.getCurrentId()).toBe(sessionId)
+    expect(warn).toHaveBeenCalledWith(
+      'Cross-tab coordination unavailable while restoring notification session identity',
+      expect.any(Error)
+    )
+    identity.destroy()
+  })
+
+  it('should fall back to BroadcastChannel when Web Lock restoration throws', async () => {
+    const warn = jest.fn()
+    const identity = new NotificationSessionIdentity(
+      makeOptions({
+        getStorage: () => new MemoryStorage(),
+        lockManager: new ThrowingLockManager(),
+        createBroadcastChannel: (name) => new FakeBroadcastChannel(name),
+        logger: { warn }
+      })
+    )
+    const resolution = identity.resolveId()
+    await jest.advanceTimersByTimeAsync(250)
+    const sessionId = await resolution
+    const pageHideEvent = new Event('pagehide')
+    Object.defineProperty(pageHideEvent, 'persisted', { value: true })
+    identity['onPageHide'](pageHideEvent as PageTransitionEvent)
+    const pageShowEvent = new Event('pageshow')
+    Object.defineProperty(pageShowEvent, 'persisted', { value: true })
+    identity['onPageShow'](pageShowEvent as PageTransitionEvent)
+    await jest.advanceTimersByTimeAsync(250)
+
+    expect(identity.getCurrentId()).toBe(sessionId)
+    expect(warn).toHaveBeenCalledWith(
+      'Web Lock unavailable while restoring notification session identity',
+      expect.any(Error)
+    )
+    identity.destroy()
+  })
+
+  it('should fall back to BroadcastChannel when Web Lock restoration is rejected', async () => {
+    const warn = jest.fn()
+    const identity = new NotificationSessionIdentity(
+      makeOptions({
+        getStorage: () => new MemoryStorage(),
+        lockManager: new RejectingLockManager(),
+        createBroadcastChannel: (name) => new FakeBroadcastChannel(name),
+        logger: { warn }
+      })
+    )
+    const resolution = identity.resolveId()
+    await jest.advanceTimersByTimeAsync(250)
+    const sessionId = await resolution
+    identity['onPageHide'](Object.assign(new Event('pagehide'), { persisted: true }) as PageTransitionEvent)
+    identity['onPageShow'](Object.assign(new Event('pageshow'), { persisted: true }) as PageTransitionEvent)
+    await jest.advanceTimersByTimeAsync(250)
+
+    expect(identity.getCurrentId()).toBe(sessionId)
+    expect(warn).toHaveBeenCalledWith('Web Lock request failed for notification session identity', expect.any(Error))
+    identity.destroy()
+  })
+
+  it('should use a replacement ID when lock and channel coordination fail after a collision', async () => {
+    const warn = jest.fn()
+    const onIdChange = jest.fn()
+    const storage = new MemoryStorage()
+    const originalId = 'a'.repeat(32)
+    const identity = new NotificationSessionIdentity(
+      makeOptions({
+        getStorage: () => storage,
+        lockManager: new CollisionThenRejectLockManager(),
+        createBroadcastChannel: () => {
+          throw new Error('channel unavailable')
+        },
+        logger: { warn },
+        onIdChange
+      })
+    )
+    identity['sessionId'] = originalId
+    storage.setItem('onecx.notification.sessionId', originalId)
+
+    await identity['reclaimOwnership']()
+
+    expect(identity.getCurrentId()).not.toBe(originalId)
+    expect(storage.getItem('onecx.notification.sessionId')).toBe(identity.getCurrentId())
+    expect(onIdChange).toHaveBeenCalledWith(identity.getCurrentId())
+    expect(warn).toHaveBeenCalledWith(
+      'Cross-tab coordination unavailable while restoring notification session identity',
+      expect.any(Error)
+    )
+    identity.destroy()
+  })
+
+  it('should stop ownership reclamation without a current identity or after destruction', async () => {
+    const identity = new NotificationSessionIdentity(makeOptions())
+
+    await identity['reclaimOwnership']()
+    identity['sessionId'] = 'stored-session'
+    identity.destroy()
+    await identity['reclaimOwnership']()
+
+    expect(identity.getCurrentId()).toBe('stored-session')
+
+    const pendingIdentity = new NotificationSessionIdentity(makeOptions({ lockManager: new DeferredLockManager() }))
+    pendingIdentity['sessionId'] = 'pending-session'
+    const pendingReclaim = pendingIdentity['reclaimOwnership']()
+    pendingIdentity.destroy()
+    await pendingReclaim
+  })
+
   it('should tolerate a throwing lock-manager accessor and unavailable coordination', async () => {
     const warn = jest.fn()
     const options = makeOptions({
@@ -673,36 +878,45 @@ describe('NotificationSessionIdentity', () => {
     expect(await resolution).toMatch(/^[a-f0-9]{32}$/)
   })
 
-  it('should keep ownership when the page enters the back-forward cache', async () => {
+  it('should reclaim ownership when a duplicate claims the ID while the page is cached', async () => {
     const storage = new MemoryStorage()
+    const duplicateStorage = new MemoryStorage()
     const channelInstances: FakeBroadcastChannel[] = []
+    const onIdChange = jest.fn()
     const createBroadcastChannel = (name: string) => {
       const channel = new FakeBroadcastChannel(name)
       channelInstances.push(channel)
       return channel
     }
     const incumbent = new NotificationSessionIdentity(
-      makeOptions({ getStorage: () => storage, createBroadcastChannel })
+      makeOptions({ getStorage: () => storage, createBroadcastChannel, onIdChange })
     )
     const incumbentPromise = incumbent.resolveId()
     await jest.advanceTimersByTimeAsync(250)
     const incumbentId = await incumbentPromise
+    incumbent['onPageShow'](new Event('pageshow') as PageTransitionEvent)
     const pageHideEvent = new Event('pagehide')
     Object.defineProperty(pageHideEvent, 'persisted', { value: true })
 
-    window.dispatchEvent(pageHideEvent)
+    incumbent['onPageHide'](pageHideEvent as PageTransitionEvent)
 
-    const duplicateStorage = new MemoryStorage()
     duplicateStorage.setItem('onecx.notification.sessionId', incumbentId)
     const duplicate = new NotificationSessionIdentity(
       makeOptions({ getStorage: () => duplicateStorage, createBroadcastChannel })
     )
     const duplicatePromise = duplicate.resolveId()
+    await jest.advanceTimersByTimeAsync(250)
+    expect(await duplicatePromise).toBe(incumbentId)
+    const pageShowEvent = new Event('pageshow')
+    Object.defineProperty(pageShowEvent, 'persisted', { value: true })
+    incumbent['onPageShow'](pageShowEvent as PageTransitionEvent)
     await jest.advanceTimersByTimeAsync(500)
 
-    expect(channelInstances[0]?.closed).toBe(false)
-    expect(await duplicatePromise).not.toBe(incumbentId)
-    expect(await incumbent.resolveId()).toBe(incumbentId)
+    expect(channelInstances[0]?.closed).toBe(true)
+    expect(incumbent.getCurrentId()).not.toBe(incumbentId)
+    expect(duplicate.getCurrentId()).toBe(incumbentId)
+    expect(storage.getItem('onecx.notification.sessionId')).toBe(incumbent.getCurrentId())
+    expect(onIdChange).toHaveBeenCalledWith(incumbent.getCurrentId())
     incumbent.destroy()
     duplicate.destroy()
   })
@@ -748,7 +962,7 @@ describe('NotificationSessionIdentity', () => {
     )
     const resolution = identity.resolveId()
 
-    window.dispatchEvent(new Event('pagehide'))
+    identity['onPageHide'](new Event('pagehide') as PageTransitionEvent)
 
     expect(await resolution).toMatch(/^[a-f0-9]{32}$/)
     expect(channelInstances[0]?.closed).toBe(true)

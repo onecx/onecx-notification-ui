@@ -60,8 +60,9 @@ export class NotificationTopic extends Topic<Notification> {
 /**
  * Connects the current user to the notification event bus.
  *
- * The register frame includes a per-tab `sessionId`, stable across reconnects
- * and reloads, while notification payloads continue on the existing topic.
+ * The register frame includes a per-tab `sessionId`, stable across reconnects and
+ * reloads unless duplicate-tab ownership is detected after back-forward-cache
+ * restoration. Notification payloads continue on the existing topic.
  */
 @Component({
   selector: 'app-notification-connector',

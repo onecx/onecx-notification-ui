@@ -26,10 +26,10 @@ export interface NotificationSessionIdentityOptions {
  *
  * The identity is persisted in tab-scoped session storage and protected against
  * duplicated tabs by a Web Lock or BroadcastChannel claim. Delayed BroadcastChannel
- * claims can replace an already-resolved ID. If coordination is unavailable, the
- * stored ID is still reused, but duplicate detection cannot be guaranteed. Call
- * {@link destroy} when the owning connector is destroyed to release ownership;
- * ownership remains active while the page is in the back-forward cache.
+ * claims can replace an already-resolved ID. Ownership is suspended while a page is
+ * in the back-forward cache and reclaimed when it is restored. If coordination is
+ * unavailable, the stored ID is still reused, but duplicate detection cannot be
+ * guaranteed. Call {@link destroy} when the owning connector is destroyed.
  */
 export class NotificationSessionIdentity {
   private readonly logger: { warn: (message: string, ...details: unknown[]) => void }
@@ -44,8 +44,21 @@ export class NotificationSessionIdentity {
   private broadcastContested = false
   private broadcastResolved = false
   private lateClaimInProgress = false
+  private ownershipReconciliationPending = false
   private readonly onPageHide = (event: PageTransitionEvent) => {
-    if (!event.persisted) this.destroy()
+    if (event.persisted) {
+      this.suspendOwnership()
+    } else {
+      this.destroy()
+    }
+  }
+  private readonly onPageShow = (event: PageTransitionEvent) => {
+    if (!event.persisted) return
+    if (!this.sessionId) {
+      this.ownershipReconciliationPending = true
+      return
+    }
+    void this.reclaimOwnership()
   }
   private readonly onBroadcastMessage = ({ data }: MessageEvent<SessionMessage>): void => {
     const candidate = this.broadcastCandidate
@@ -77,12 +90,21 @@ export class NotificationSessionIdentity {
 
   constructor(private readonly options: NotificationSessionIdentityOptions = {}) {
     this.logger = options.logger ?? createLogger('NotificationSessionIdentity')
-    if (typeof window !== 'undefined') window.addEventListener('pagehide', this.onPageHide)
+    if (typeof window !== 'undefined') {
+      window.addEventListener('pagehide', this.onPageHide)
+      window.addEventListener('pageshow', this.onPageShow)
+    }
   }
 
   /** Returns the cached ID, resolving and claiming tab ownership on first use. */
   public resolveId(): Promise<string> {
-    this.resolvePromise ??= this.resolveIdentity()
+    this.resolvePromise ??= this.resolveIdentity().then(async (resolvedId) => {
+      if (this.ownershipReconciliationPending && !this.destroyed) {
+        this.ownershipReconciliationPending = false
+        await this.reclaimOwnership()
+      }
+      return this.sessionId ?? resolvedId
+    })
     return this.resolvePromise
   }
 
@@ -99,7 +121,10 @@ export class NotificationSessionIdentity {
     this.cancelDiscovery?.()
     this.cancelDiscovery = undefined
     this.closeBroadcastChannel()
-    if (typeof window !== 'undefined') window.removeEventListener('pagehide', this.onPageHide)
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('pagehide', this.onPageHide)
+      window.removeEventListener('pageshow', this.onPageShow)
+    }
   }
 
   private async resolveIdentity(): Promise<string> {
@@ -253,6 +278,51 @@ export class NotificationSessionIdentity {
         resolve()
       }
     })
+  }
+
+  private suspendOwnership(): void {
+    this.releaseLock?.()
+    this.releaseLock = undefined
+    this.closeBroadcastChannel()
+    this.broadcastResolved = false
+  }
+
+  private async reclaimOwnership(): Promise<void> {
+    const previousId = this.sessionId
+    if (!previousId || this.destroyed) return
+
+    let candidate = previousId
+    const lockManager = this.getLockManager()
+    if (lockManager) {
+      try {
+        while (!this.destroyed) {
+          const claimed = await this.claimWebLock(lockManager, candidate)
+          if (claimed === true) {
+            this.sessionId = candidate
+            this.writeStoredId(candidate)
+            if (previousId !== candidate) this.options.onIdChange?.(candidate)
+            return
+          }
+          if (claimed === undefined) break
+          candidate = this.createId()
+        }
+      } catch (error) {
+        this.logger.warn('Web Lock unavailable while restoring notification session identity', error)
+      }
+    }
+
+    if (this.destroyed) return
+    try {
+      const claimedId = await this.claimBroadcastChannel(candidate)
+      this.sessionId = claimedId
+      this.writeStoredId(claimedId)
+      if (previousId !== claimedId) this.options.onIdChange?.(claimedId)
+    } catch (error) {
+      this.logger.warn('Cross-tab coordination unavailable while restoring notification session identity', error)
+      this.sessionId = candidate
+      this.writeStoredId(candidate)
+      if (previousId !== candidate) this.options.onIdChange?.(candidate)
+    }
   }
 
   private handleBroadcastCollision(): void {
