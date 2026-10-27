@@ -68,7 +68,7 @@ export class NotificationSessionIdentity {
 
     switch (data.type) {
       case 'reclaim':
-        this.handleReclaimMessage(candidate)
+        this.handleBroadcastCollision()
         break
       case 'claim':
         this.handleClaimMessage(data, candidate)
@@ -84,13 +84,8 @@ export class NotificationSessionIdentity {
     }
   }
 
-  private handleReclaimMessage(candidate: string): void {
-    if (this.sessionId === candidate && this.broadcastResolved) {
-      void this.claimReplacementBroadcastId()
-    }
-  }
-
   private handleClaimMessage(data: Extract<SessionMessage, { type: 'claim' }>, candidate: string): void {
+    if (this.broadcastContested) return
     if (this.sessionId === candidate && this.broadcastResolved) {
       this.broadcastChannel?.postMessage({
         type: 'owner',
@@ -119,12 +114,12 @@ export class NotificationSessionIdentity {
 
   /** Returns the cached ID, resolving and claiming tab ownership on first use. */
   public resolveId(): Promise<string> {
-    this.resolvePromise ??= this.resolveIdentity().then(async (resolvedId) => {
+    this.resolvePromise ??= this.resolveIdentity().then(async () => {
       if (this.ownershipReconciliationPending && !this.destroyed) {
         this.ownershipReconciliationPending = false
         await this.reclaimOwnership()
       }
-      return this.sessionId ?? resolvedId
+      return this.sessionId!
     })
     return this.resolvePromise
   }
@@ -167,10 +162,9 @@ export class NotificationSessionIdentity {
 
   private async claimWithWebLock(
     candidate: string,
-    lockManager: LockManager | undefined,
+    lockManager: LockManager,
     restoring: boolean
   ): Promise<{ candidate: string; claimed: boolean }> {
-    if (!lockManager) return { candidate, claimed: false }
     try {
       while (!this.destroyed) {
         const claimed = await this.claimWebLock(lockManager, candidate)

@@ -134,22 +134,6 @@ describe('OneCXNotificationConnectorComponent', () => {
     closeSpy = jest.spyOn(SockJsRxClient.prototype, 'close').mockImplementation(() => undefined)
   })
 
-  it('should ignore register frames received from the server', async () => {
-    initFixture()
-    const publishSpy = jest.spyOn(fakeTopic, 'publish')
-    component.ocxInitRemoteComponent(mockConfig)
-    await settlePromises()
-
-    socketStreams[0]?.next({
-      type: 'register',
-      address: 'notifications.onecx.new.test-user',
-      token: 'mock-token',
-      sessionId: 'session'
-    })
-
-    expect(publishSpy).not.toHaveBeenCalled()
-  })
-
   afterEach(() => {
     fixture?.destroy()
     socketStreams.forEach((stream) => stream.complete())
@@ -164,6 +148,22 @@ describe('OneCXNotificationConnectorComponent', () => {
       delete (globalThis as Partial<typeof globalThis>).BroadcastChannel
     }
     jest.useRealTimers()
+  })
+
+  it('should ignore register frames received from the server', async () => {
+    initFixture()
+    const publishSpy = jest.spyOn(fakeTopic, 'publish')
+    component.ocxInitRemoteComponent(mockConfig)
+    await settlePromises()
+
+    socketStreams[0]?.next({
+      type: 'register',
+      address: 'notifications.onecx.new.test-user',
+      token: 'mock-token',
+      sessionId: 'session'
+    })
+
+    expect(publishSpy).not.toHaveBeenCalled()
   })
 
   it('should create the connector component', () => {
@@ -287,26 +287,73 @@ describe('OneCXNotificationConnectorComponent', () => {
     triggerSocketOpen()
     const channel = DeferredBroadcastChannel.instances[0]
     const claim = channel?.messages[0] as { sessionId: string; nonce: string }
+    closeSpy.mockImplementationOnce(() => socketStreams[0].error(new Error('SockJS connection closed')))
 
     channel?.onmessage?.call(channel, {
       data: { type: 'owner', sessionId: claim.sessionId, to: claim.nonce }
     } as MessageEvent)
-    await jest.advanceTimersByTimeAsync(250)
+    await jest.advanceTimersByTimeAsync(251)
 
-    expect(closeSpy).toHaveBeenCalledTimes(1)
+    expect(closeSpy).toHaveBeenCalled()
     expect(sentMessages).toHaveLength(1)
-
-    jest.useFakeTimers()
-    socketStreams[0]?.error(new Error('identity changed'))
-    await jest.advanceTimersByTimeAsync(5000)
     await settlePromises()
     triggerSocketOpen()
 
     expect(connectSpy).toHaveBeenCalledTimes(2)
+    expect(loggerMock.error).not.toHaveBeenCalled()
     expect(sentMessages).toHaveLength(2)
     expect(sentMessages[1]?.sessionId).not.toBe(sentMessages[0]?.sessionId)
     expect(sentMessages[1]?.address).toBe(sentMessages[0]?.address)
     expect(sentMessages[1]?.token).toBe(sentMessages[0]?.token)
+  })
+
+  it('should keep the socket when the identity has not changed', async () => {
+    initFixture()
+    component.ocxInitRemoteComponent(mockConfig)
+    await settlePromises()
+    triggerSocketOpen()
+
+    component['registerWithSessionId'](sentMessages[0].sessionId)
+
+    expect(closeSpy).not.toHaveBeenCalled()
+    expect(connectSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('should restore error backoff when a connection fails after an intentional rotation', async () => {
+    initFixture()
+    component.ocxInitRemoteComponent(mockConfig)
+    await settlePromises()
+    triggerSocketOpen()
+    jest.useFakeTimers()
+    closeSpy.mockImplementationOnce(() => socketStreams[0].error(new Error('SockJS connection closed')))
+    component['registerWithSessionId']('replacement-session')
+    await jest.advanceTimersByTimeAsync(0)
+    await settlePromises()
+
+    const error = new Error('network failure')
+    socketStreams[1].error(error)
+    await jest.advanceTimersByTimeAsync(4999)
+
+    expect(connectSpy).toHaveBeenCalledTimes(2)
+    expect(loggerMock.error).toHaveBeenCalledWith('WebSocket error, reconnecting in 5000ms...', error)
+    await jest.advanceTimersByTimeAsync(1)
+    await settlePromises()
+    expect(connectSpy).toHaveBeenCalledTimes(3)
+  })
+
+  it('should cancel an intentional reconnect when the connector is destroyed', async () => {
+    initFixture()
+    component.ocxInitRemoteComponent(mockConfig)
+    await settlePromises()
+    triggerSocketOpen()
+    jest.useFakeTimers()
+    closeSpy.mockImplementationOnce(() => socketStreams[0].error(new Error('SockJS connection closed')))
+
+    component['registerWithSessionId']('replacement-session')
+    fixture.destroy()
+    await jest.advanceTimersByTimeAsync(5000)
+
+    expect(connectSpy).toHaveBeenCalledTimes(1)
   })
 
   it('should not register after the connector has been destroyed', async () => {

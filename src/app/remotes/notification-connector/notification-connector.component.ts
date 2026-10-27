@@ -80,6 +80,7 @@ export class OneCXNotificationConnectorComponent implements ocxRemoteComponent, 
   private sockJsClient?: SockJsRxClient<RawNotification | RegisterMessage, RegisterMessage>
   private registerContext?: { userId: string; token: string }
   private registeredSessionId?: string
+  private reconnectForIdentityChange = false
   private socketOpen = false
   private destroyed = false
   private readonly reconnectDelay = 5000
@@ -118,6 +119,10 @@ export class OneCXNotificationConnectorComponent implements ocxRemoteComponent, 
       .pipe(
         retry({
           delay: (error) => {
+            if (this.reconnectForIdentityChange) {
+              this.reconnectForIdentityChange = false
+              return timer(0)
+            }
             this.logger.error('WebSocket error, reconnecting in ' + this.reconnectDelay + 'ms...', error)
             return timer(this.reconnectDelay)
           }
@@ -180,6 +185,7 @@ export class OneCXNotificationConnectorComponent implements ocxRemoteComponent, 
     if (this.destroyed || !this.socketOpen || !this.registerContext) return
     if (this.registeredSessionId === sessionId) return
     this.socketOpen = false
+    this.reconnectForIdentityChange = true
     this.sockJsClient?.close()
   }
 
