@@ -67,6 +67,7 @@ describe('OneCXNotificationConnectorComponent', () => {
   let sentMessages: RegisterFrame[]
   let connectSpy: jest.SpyInstance<Observable<RawNotification | RegisterFrame>, [url: string]>
   let sendSpy: jest.SpyInstance<void, [message: RegisterFrame]>
+  let closeSpy: jest.SpyInstance<void, []>
   let originalStorageDescriptor: PropertyDescriptor | undefined
   let originalBroadcastChannelDescriptor: PropertyDescriptor | undefined
 
@@ -130,7 +131,7 @@ describe('OneCXNotificationConnectorComponent', () => {
     sendSpy = jest.spyOn(SockJsRxClient.prototype, 'send').mockImplementation((message: RegisterFrame) => {
       sentMessages.push(message)
     })
-    jest.spyOn(SockJsRxClient.prototype, 'close').mockImplementation(() => undefined)
+    closeSpy = jest.spyOn(SockJsRxClient.prototype, 'close').mockImplementation(() => undefined)
   })
 
   it('should ignore register frames received from the server', async () => {
@@ -275,7 +276,7 @@ describe('OneCXNotificationConnectorComponent', () => {
     expect(connectSpy).not.toHaveBeenCalled()
   })
 
-  it('should re-register with a new identity after a late owner reply', async () => {
+  it('should reconnect before registering a new identity after a late owner reply', async () => {
     originalBroadcastChannelDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'BroadcastChannel')
     Object.defineProperty(globalThis, 'BroadcastChannel', { configurable: true, value: DeferredBroadcastChannel })
     jest.useFakeTimers()
@@ -292,6 +293,16 @@ describe('OneCXNotificationConnectorComponent', () => {
     } as MessageEvent)
     await jest.advanceTimersByTimeAsync(250)
 
+    expect(closeSpy).toHaveBeenCalledTimes(1)
+    expect(sentMessages).toHaveLength(1)
+
+    jest.useFakeTimers()
+    socketStreams[0]?.error(new Error('identity changed'))
+    await jest.advanceTimersByTimeAsync(5000)
+    await settlePromises()
+    triggerSocketOpen()
+
+    expect(connectSpy).toHaveBeenCalledTimes(2)
     expect(sentMessages).toHaveLength(2)
     expect(sentMessages[1]?.sessionId).not.toBe(sentMessages[0]?.sessionId)
     expect(sentMessages[1]?.address).toBe(sentMessages[0]?.address)

@@ -30,6 +30,7 @@ class MemoryStorage implements Storage {
 
 class FakeLockManager implements LockManager {
   private readonly held = new Set<string>()
+  private readonly waiters = new Map<string, Array<() => void>>()
 
   async query(): Promise<LockManagerSnapshot> {
     return {}
@@ -42,12 +43,43 @@ class FakeLockManager implements LockManager {
     optionsOrCallback: LockOptions | LockGrantedCallback,
     optionalCallback?: LockGrantedCallback
   ): Promise<T> {
+    const options = typeof optionsOrCallback === 'function' ? undefined : optionsOrCallback
     const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : optionalCallback!
-    if (this.held.has(name)) return Promise.resolve(callback(null) as T)
+    if (this.held.has(name)) {
+      if (options?.ifAvailable) return Promise.resolve(callback(null) as T)
+      return new Promise<T>((resolve, reject) => {
+        const grant = () => {
+          options?.signal?.removeEventListener('abort', abort)
+          this.grant<T>(name, callback).then(resolve, reject)
+        }
+        const abort = () => {
+          const waiters = this.waiters.get(name)
+          const index = waiters?.indexOf(grant) ?? -1
+          if (index >= 0) waiters?.splice(index, 1)
+          reject(new DOMException('Lock request aborted', 'AbortError'))
+        }
+        if (options?.signal?.aborted) {
+          abort()
+          return
+        }
+        options?.signal?.addEventListener('abort', abort, { once: true })
+        const waiters = this.waiters.get(name) ?? []
+        waiters.push(grant)
+        this.waiters.set(name, waiters)
+      })
+    }
 
+    return this.grant(name, callback)
+  }
+
+  private grant<T>(name: string, callback: LockGrantedCallback): Promise<T> {
     this.held.add(name)
     const lock = { name, mode: 'exclusive' } as Lock
-    return Promise.resolve(callback(lock) as T).finally(() => this.held.delete(name))
+    return Promise.resolve(callback(lock) as T).finally(() => {
+      this.held.delete(name)
+      const next = this.waiters.get(name)?.shift()
+      next?.()
+    })
   }
 }
 
@@ -227,6 +259,19 @@ describe('NotificationSessionIdentity', () => {
     reloadedRuntime.destroy()
   })
 
+  it('should reuse the ID when a connector is recreated before its lock is released', async () => {
+    const storage = new MemoryStorage()
+    const lockManager = new FakeLockManager()
+    const firstRuntime = new NotificationSessionIdentity(makeOptions({ getStorage: () => storage, lockManager }))
+    const originalId = await firstRuntime.resolveId()
+
+    firstRuntime.destroy()
+    const recreatedRuntime = new NotificationSessionIdentity(makeOptions({ getStorage: () => storage, lockManager }))
+
+    expect(await recreatedRuntime.resolveId()).toBe(originalId)
+    recreatedRuntime.destroy()
+  })
+
   it('should assign a distinct ID to a new tab with empty storage', async () => {
     const lockManager = new FakeLockManager()
     const firstTab = new NotificationSessionIdentity(
@@ -253,7 +298,9 @@ describe('NotificationSessionIdentity', () => {
     duplicateStorage.setItem('onecx.notification.sessionId', originalId)
     const duplicate = new NotificationSessionIdentity(makeOptions({ getStorage: () => duplicateStorage, lockManager }))
 
-    const duplicateId = await duplicate.resolveId()
+    const duplicateResolution = duplicate.resolveId()
+    await jest.advanceTimersByTimeAsync(250)
+    const duplicateId = await duplicateResolution
 
     expect(duplicateId).not.toBe(originalId)
     expect(await incumbent.resolveId()).toBe(originalId)
@@ -536,6 +583,7 @@ describe('NotificationSessionIdentity', () => {
 
   it('should reconcile ownership when the page is restored before its initial identity resolves', async () => {
     const channelInstances: FakeBroadcastChannel[] = []
+    const removeEventListenerSpy = jest.spyOn(globalThis.window, 'removeEventListener')
     const identity = new NotificationSessionIdentity(
       makeOptions({
         getStorage: () => new MemoryStorage(),
@@ -549,10 +597,10 @@ describe('NotificationSessionIdentity', () => {
     const resolution = identity.resolveId()
     const pageHideEvent = new Event('pagehide')
     Object.defineProperty(pageHideEvent, 'persisted', { value: true })
-    identity['onPageHide'](pageHideEvent as PageTransitionEvent)
+    globalThis.window.dispatchEvent(pageHideEvent)
     const pageShowEvent = new Event('pageshow')
     Object.defineProperty(pageShowEvent, 'persisted', { value: true })
-    identity['onPageShow'](pageShowEvent as PageTransitionEvent)
+    globalThis.window.dispatchEvent(pageShowEvent)
 
     await jest.advanceTimersByTimeAsync(500)
 
@@ -560,6 +608,9 @@ describe('NotificationSessionIdentity', () => {
     expect(channelInstances).toHaveLength(2)
     expect(channelInstances[0]?.closed).toBe(true)
     identity.destroy()
+    expect(removeEventListenerSpy).toHaveBeenCalledWith('pagehide', identity['onPageHide'])
+    expect(removeEventListenerSpy).toHaveBeenCalledWith('pageshow', identity['onPageShow'])
+    removeEventListenerSpy.mockRestore()
   })
 
   it('should claim a different Web Lock identity when another tab takes the cached identity', async () => {
@@ -577,16 +628,18 @@ describe('NotificationSessionIdentity', () => {
     for (let index = 0; index < 5; index++) await Promise.resolve()
     duplicateStorage.setItem('onecx.notification.sessionId', originalId)
     const duplicate = new NotificationSessionIdentity(makeOptions({ getStorage: () => duplicateStorage, lockManager }))
+    const duplicateResolution = duplicate.resolveId()
+    await jest.advanceTimersByTimeAsync(250)
 
-    expect(await duplicate.resolveId()).toBe(originalId)
+    expect(await duplicateResolution).not.toBe(originalId)
     const pageShowEvent = new Event('pageshow')
     Object.defineProperty(pageShowEvent, 'persisted', { value: true })
     original['onPageShow'](pageShowEvent as PageTransitionEvent)
     await jest.advanceTimersByTimeAsync(0)
 
-    expect(original.getCurrentId()).not.toBe(originalId)
-    expect(duplicate.getCurrentId()).toBe(originalId)
-    expect(onIdChange).toHaveBeenCalledWith(original.getCurrentId())
+    expect(original.getCurrentId()).toBe(originalId)
+    expect(duplicate.getCurrentId()).not.toBe(originalId)
+    expect(onIdChange).not.toHaveBeenCalled()
     original.destroy()
     duplicate.destroy()
   })
@@ -883,6 +936,7 @@ describe('NotificationSessionIdentity', () => {
     const duplicateStorage = new MemoryStorage()
     const channelInstances: FakeBroadcastChannel[] = []
     const onIdChange = jest.fn()
+    const duplicateOnIdChange = jest.fn()
     const createBroadcastChannel = (name: string) => {
       const channel = new FakeBroadcastChannel(name)
       channelInstances.push(channel)
@@ -894,7 +948,7 @@ describe('NotificationSessionIdentity', () => {
     const incumbentPromise = incumbent.resolveId()
     await jest.advanceTimersByTimeAsync(250)
     const incumbentId = await incumbentPromise
-    incumbent['onPageShow'](new Event('pageshow') as PageTransitionEvent)
+    globalThis.window.dispatchEvent(new Event('pageshow'))
     const pageHideEvent = new Event('pagehide')
     Object.defineProperty(pageHideEvent, 'persisted', { value: true })
 
@@ -902,7 +956,7 @@ describe('NotificationSessionIdentity', () => {
 
     duplicateStorage.setItem('onecx.notification.sessionId', incumbentId)
     const duplicate = new NotificationSessionIdentity(
-      makeOptions({ getStorage: () => duplicateStorage, createBroadcastChannel })
+      makeOptions({ getStorage: () => duplicateStorage, createBroadcastChannel, onIdChange: duplicateOnIdChange })
     )
     const duplicatePromise = duplicate.resolveId()
     await jest.advanceTimersByTimeAsync(250)
@@ -913,10 +967,11 @@ describe('NotificationSessionIdentity', () => {
     await jest.advanceTimersByTimeAsync(500)
 
     expect(channelInstances[0]?.closed).toBe(true)
-    expect(incumbent.getCurrentId()).not.toBe(incumbentId)
-    expect(duplicate.getCurrentId()).toBe(incumbentId)
-    expect(storage.getItem('onecx.notification.sessionId')).toBe(incumbent.getCurrentId())
-    expect(onIdChange).toHaveBeenCalledWith(incumbent.getCurrentId())
+    expect(incumbent.getCurrentId()).toBe(incumbentId)
+    expect(duplicate.getCurrentId()).not.toBe(incumbentId)
+    expect(storage.getItem('onecx.notification.sessionId')).toBe(incumbentId)
+    expect(onIdChange).not.toHaveBeenCalled()
+    expect(duplicateOnIdChange).toHaveBeenCalledWith(duplicate.getCurrentId())
     incumbent.destroy()
     duplicate.destroy()
   })
@@ -962,7 +1017,7 @@ describe('NotificationSessionIdentity', () => {
     )
     const resolution = identity.resolveId()
 
-    identity['onPageHide'](new Event('pagehide') as PageTransitionEvent)
+    globalThis.window.dispatchEvent(new Event('pagehide'))
 
     expect(await resolution).toMatch(/^[a-f0-9]{32}$/)
     expect(channelInstances[0]?.closed).toBe(true)

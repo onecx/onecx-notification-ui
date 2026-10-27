@@ -61,8 +61,9 @@ export class NotificationTopic extends Topic<Notification> {
  * Connects the current user to the notification event bus.
  *
  * The register frame includes a per-tab `sessionId`, stable across reconnects and
- * reloads unless duplicate-tab ownership is detected after back-forward-cache
- * restoration. Notification payloads continue on the existing topic.
+ * reloads. If a duplicate uses the same ID while the original is in the back-forward
+ * cache, the duplicate rotates its ID and reconnects. Notification payloads continue
+ * on the existing topic.
  */
 @Component({
   selector: 'app-notification-connector',
@@ -78,6 +79,7 @@ export class OneCXNotificationConnectorComponent implements ocxRemoteComponent, 
   private readonly sessionIdPromise = this.sessionIdentity.resolveId()
   private sockJsClient?: SockJsRxClient<RawNotification | RegisterMessage, RegisterMessage>
   private registerContext?: { userId: string; token: string }
+  private registeredSessionId?: string
   private socketOpen = false
   private destroyed = false
   private readonly reconnectDelay = 5000
@@ -155,6 +157,7 @@ export class OneCXNotificationConnectorComponent implements ocxRemoteComponent, 
     sessionId: string
   ): SockJsRxClient<RawNotification | RegisterMessage, RegisterMessage> {
     this.socketOpen = false
+    this.registeredSessionId = undefined
     this.sockJsClient?.close()
     this.registerContext = { userId, token }
     this.sockJsClient = new SockJsRxClient<RawNotification | RegisterMessage, RegisterMessage>({
@@ -175,11 +178,14 @@ export class OneCXNotificationConnectorComponent implements ocxRemoteComponent, 
 
   private registerWithSessionId(sessionId: string): void {
     if (this.destroyed || !this.socketOpen || !this.registerContext) return
-    this.sendRegisterMessage(this.registerContext.userId, this.registerContext.token, sessionId)
+    if (this.registeredSessionId === sessionId) return
+    this.socketOpen = false
+    this.sockJsClient?.close()
   }
 
   private sendRegisterMessage(userId: string, token: string, sessionId: string): void {
     if (this.destroyed) return
+    this.registeredSessionId = sessionId
     this.sockJsClient?.send({
       type: 'register',
       address: `notifications.onecx.new.${userId}`,
