@@ -4,8 +4,10 @@ OneCX Notification UI
 
 ## Notification session identity
 
-The notification connector assigns each browser tab a random session ID and stores it in tab-scoped `sessionStorage`, so page reloads and socket reconnects reuse the same identity. A newly opened tab gets a new ID. If a duplicated tab inherits the original tab's storage, Web Locks or `BroadcastChannel` ownership checks detect the live owner and assign the duplicate a different ID. Delayed `BroadcastChannel` owner replies also cause the duplicate to switch IDs and re-register. If a duplicate claims the ID while the original is in the back-forward cache, the original keeps its ID when restored and the duplicate rotates to a new one. Each socket is registered with only one session ID; a rotation closes the old connection and reconnects immediately, without the error retry delay. Ownership is released when the connector is destroyed without deleting the stored value.
+The notification connector uses one random session ID per loaded browser document (the current page runtime). Socket reconnects, Angular route changes, and destroying or recreating a connector in that document reuse the same ID. Concurrent connectors in the same document also share it.
 
-If session storage is unavailable, the connector continues with an in-memory identity. If coordination APIs are unavailable while session storage works, the stored ID is still reused across reloads, but duplicate-tab detection cannot be guaranteed. Notification registration continues in either fallback.
+A full reload, full-page navigation, or newly opened or duplicated tab creates a new document and a new ID. Restoring the same document from the browser's back-forward cache retains its ID; if the browser reloads it instead, it gets a new one. The ID is held only in memory. No session storage, Web Locks, BroadcastChannel ownership checks, or identity rotation are needed.
+
+A reload intentionally starts a new notification session rather than resuming the previous document's per-session catch-up. Catch-up continuity is limited to reconnects of the same document. New-session delivery follows the BFF's new-session policy; a fresh ID does not recover the old session's missed events.
 
 Each registration adds the opaque `sessionId` field to the existing frame: `{ type: 'register', address, token, sessionId }`. The address and token are unchanged, and received notifications continue to be published unchanged on `NotificationTopic`.

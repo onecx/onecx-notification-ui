@@ -1,7 +1,8 @@
+import { DOCUMENT } from '@angular/common'
 import { Component, Input, inject, DestroyRef, ChangeDetectionStrategy } from '@angular/core'
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop'
 import { Observable, defer, from, timer } from 'rxjs'
-import { map, retry, switchMap } from 'rxjs/operators'
+import { retry, switchMap } from 'rxjs/operators'
 
 import { Topic } from '@onecx/accelerator'
 import { AuthProxyService } from '@onecx/angular-auth'
@@ -14,7 +15,7 @@ import {
 } from '@onecx/angular-remote-components'
 
 import { createLogger } from 'src/app/shared/utils/logger.utils'
-import { NotificationSessionIdentity } from 'src/app/shared/utils/notification-session.utils'
+import { getNotificationSessionId } from 'src/app/shared/utils/notification-session.utils'
 import { SockJsRxClient } from '../../shared/utils/sockjs.utils'
 
 interface RegisterMessage {
@@ -60,28 +61,21 @@ export class NotificationTopic extends Topic<Notification> {
 /**
  * Connects the current user to the notification event bus.
  *
- * The register frame includes a per-tab `sessionId`, stable across reconnects and
- * reloads. If a duplicate uses the same ID while the original is in the back-forward
- * cache, the duplicate rotates its ID and reconnects. Notification payloads continue
- * on the existing topic.
+ * Every register frame includes the loaded document's `sessionId`. Reconnects and
+ * connector recreation reuse it; reloads and new tabs start a new session without
+ * resuming the previous document's catch-up. Notification payloads are unchanged.
  */
 @Component({
   selector: 'app-notification-connector',
+  standalone: true,
   template: '',
   imports: [AngularRemoteComponentsModule],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class OneCXNotificationConnectorComponent implements ocxRemoteComponent, ocxRemoteWebcomponent {
   private readonly destroyRef = inject(DestroyRef)
-  private readonly sessionIdentity = new NotificationSessionIdentity({
-    onIdChange: (sessionId) => this.registerWithSessionId(sessionId)
-  })
-  private readonly sessionIdPromise = this.sessionIdentity.resolveId()
+  private readonly sessionId = getNotificationSessionId(inject(DOCUMENT))
   private sockJsClient?: SockJsRxClient<RawNotification | RegisterMessage, RegisterMessage>
-  private registerContext?: { userId: string; token: string }
-  private registeredSessionId?: string
-  private reconnectForIdentityChange = false
-  private socketOpen = false
   private destroyed = false
   private readonly reconnectDelay = 5000
   private _notificationTopic?: NotificationTopic
@@ -100,10 +94,8 @@ export class OneCXNotificationConnectorComponent implements ocxRemoteComponent, 
   constructor() {
     this.destroyRef.onDestroy(() => {
       this.destroyed = true
-      this.socketOpen = false
       this.sockJsClient?.close()
       this._notificationTopic?.destroy()
-      this.sessionIdentity.destroy()
     })
   }
 
@@ -119,10 +111,6 @@ export class OneCXNotificationConnectorComponent implements ocxRemoteComponent, 
       .pipe(
         retry({
           delay: (error) => {
-            if (this.reconnectForIdentityChange) {
-              this.reconnectForIdentityChange = false
-              return timer(0)
-            }
             this.logger.error('WebSocket error, reconnecting in ' + this.reconnectDelay + 'ms...', error)
             return timer(this.reconnectDelay)
           }
@@ -135,11 +123,10 @@ export class OneCXNotificationConnectorComponent implements ocxRemoteComponent, 
   private createSocketConnection(url: string): Observable<RawNotification | RegisterMessage> {
     return from(this.authService.updateTokenIfNeeded()).pipe(
       switchMap(() => this.userService.profile$.asObservable()),
-      switchMap((profile) => from(this.sessionIdPromise).pipe(map((sessionId) => ({ profile, sessionId })))),
-      switchMap(({ profile, sessionId }) => {
+      switchMap((profile) => {
         const headerValues = this.authService.getHeaderValues()
         const token = this.extractBearerToken(headerValues)
-        const client = this.recreateSockJsClient(profile.userId, token, sessionId)
+        const client = this.recreateSockJsClient(profile.userId, token)
 
         return client.connect(url)
       })
@@ -158,22 +145,16 @@ export class OneCXNotificationConnectorComponent implements ocxRemoteComponent, 
 
   private recreateSockJsClient(
     userId: string,
-    token: string,
-    sessionId: string
+    token: string
   ): SockJsRxClient<RawNotification | RegisterMessage, RegisterMessage> {
-    this.socketOpen = false
-    this.registeredSessionId = undefined
     this.sockJsClient?.close()
-    this.registerContext = { userId, token }
     this.sockJsClient = new SockJsRxClient<RawNotification | RegisterMessage, RegisterMessage>({
       onOpen: () => {
         if (this.destroyed) return
-        this.socketOpen = true
         this.logger.info('WebSocket connection established, connecting with user id:', userId)
-        this.sendRegisterMessage(userId, token, this.sessionIdentity.getCurrentId() ?? sessionId)
+        this.sendRegisterMessage(userId, token)
       },
       onClose: () => {
-        this.socketOpen = false
         this.logger.info('WebSocket connection closed')
       }
     })
@@ -181,22 +162,13 @@ export class OneCXNotificationConnectorComponent implements ocxRemoteComponent, 
     return this.sockJsClient
   }
 
-  private registerWithSessionId(sessionId: string): void {
-    if (this.destroyed || !this.socketOpen || !this.registerContext) return
-    if (this.registeredSessionId === sessionId) return
-    this.socketOpen = false
-    this.reconnectForIdentityChange = true
-    this.sockJsClient?.close()
-  }
-
-  private sendRegisterMessage(userId: string, token: string, sessionId: string): void {
+  private sendRegisterMessage(userId: string, token: string): void {
     if (this.destroyed) return
-    this.registeredSessionId = sessionId
     this.sockJsClient?.send({
       type: 'register',
       address: `notifications.onecx.new.${userId}`,
       token,
-      sessionId
+      sessionId: this.sessionId
     })
   }
 
