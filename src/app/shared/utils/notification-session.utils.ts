@@ -1,7 +1,8 @@
 let sessionId: string | undefined
 
 /**
- * Returns the notification session ID for the tab's running app.
+ * Returns the notification session ID for the loaded page runtime (browser document).
+ * The ID is held in a module-level variable, not keyed by Document.
  *
  * Socket reconnects, client-side navigation and connector recreation reuse it.
  * Reloads and new or duplicated tabs start a fresh runtime and a new identity.

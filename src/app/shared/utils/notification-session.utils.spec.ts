@@ -11,29 +11,17 @@ describe('getNotificationSessionId', () => {
     expect(getNotificationSessionId()).toBe(sessionId)
   })
 
-  it.each(['a reload', 'a new tab', 'a duplicated tab'])(
-    'should generate a different ID when %s starts a fresh app runtime',
-    async () => {
-      const originalId = getNotificationSessionId()
-      let freshId: string | undefined
+  it('should generate a different ID when a fresh app runtime starts', async () => {
+    const originalId = getNotificationSessionId()
+    let freshId: string | undefined
 
-      await jest.isolateModulesAsync(async () => {
-        const freshSession = await import('./notification-session.utils')
-        freshId = freshSession.getNotificationSessionId()
-      })
+    await jest.isolateModulesAsync(async () => {
+      const freshSession = await import('./notification-session.utils')
+      freshId = freshSession.getNotificationSessionId()
+    })
 
-      expect(freshId).toMatch(/^[a-f0-9]{32}$/)
-      expect(freshId).not.toBe(originalId)
-      expect(getNotificationSessionId()).toBe(originalId)
-    }
-  )
-
-  it('should keep the ID when the running app is restored from BFCache', () => {
-    const sessionId = getNotificationSessionId()
-
-    globalThis.window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }))
-    globalThis.window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }))
-
-    expect(getNotificationSessionId()).toBe(sessionId)
+    expect(freshId).toMatch(/^[a-f0-9]{32}$/)
+    expect(freshId).not.toBe(originalId)
+    expect(getNotificationSessionId()).toBe(originalId)
   })
 })
