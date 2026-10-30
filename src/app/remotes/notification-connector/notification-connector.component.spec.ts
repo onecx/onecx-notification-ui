@@ -135,7 +135,7 @@ describe('OneCXNotificationConnectorComponent', () => {
     expect(authServiceMock.getHeaderValues).toHaveBeenCalled()
   })
 
-  it('should include the document ID with unchanged address and token when registering', async () => {
+  it('should include the session ID with unchanged address and token when registering', async () => {
     initFixture()
     component.ocxInitRemoteComponent(mockConfig)
     await settlePromises()
@@ -168,7 +168,7 @@ describe('OneCXNotificationConnectorComponent', () => {
     expect(sentMessages[1].sessionId).toBe(originalId)
   })
 
-  it('should reuse the ID when the connector is recreated in the same document', async () => {
+  it('should reuse the ID when the connector is recreated in the same running app', async () => {
     initFixture()
     component.ocxInitRemoteComponent(mockConfig)
     await settlePromises()
@@ -184,7 +184,7 @@ describe('OneCXNotificationConnectorComponent', () => {
     expect(sentMessages[1].sessionId).toBe(originalId)
   })
 
-  it('should share the ID when two connectors exist in the same document', async () => {
+  it('should share the ID when two connectors exist in the same running app', async () => {
     initFixture()
     component.ocxInitRemoteComponent(mockConfig)
     await settlePromises()

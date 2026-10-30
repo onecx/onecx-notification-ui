@@ -1,40 +1,34 @@
 import { getNotificationSessionId } from './notification-session.utils'
 
 describe('getNotificationSessionId', () => {
-  it('should return an opaque random ID when a document first registers', () => {
-    const pageDocument = document.implementation.createHTMLDocument()
-
-    expect(getNotificationSessionId(pageDocument)).toMatch(/^[a-f0-9]{32}$/)
+  it('should return an opaque random ID when the tab first registers', () => {
+    expect(getNotificationSessionId()).toMatch(/^[a-f0-9]{32}$/)
   })
 
-  it('should reuse the ID when the same document registers again', () => {
-    const pageDocument = document.implementation.createHTMLDocument()
-    const sessionId = getNotificationSessionId(pageDocument)
+  it('should reuse the ID when the same running app registers again', () => {
+    const sessionId = getNotificationSessionId()
 
-    expect(getNotificationSessionId(pageDocument)).toBe(sessionId)
+    expect(getNotificationSessionId()).toBe(sessionId)
   })
 
-  it('should generate a new ID when a reload creates a new document', () => {
-    const initialDocument = document.implementation.createHTMLDocument()
-    const reloadedDocument = document.implementation.createHTMLDocument()
+  it.each(['a reload', 'a new tab', 'a duplicated tab'])(
+    'should generate a different ID when %s starts a fresh app runtime',
+    async () => {
+      const originalId = getNotificationSessionId()
+      let freshId: string | undefined
 
-    expect(getNotificationSessionId(reloadedDocument)).not.toBe(getNotificationSessionId(initialDocument))
-  })
+      await jest.isolateModulesAsync(async () => {
+        const freshSession = await import('./notification-session.utils')
+        freshId = freshSession.getNotificationSessionId()
+      })
 
-  it('should generate a different ID when a duplicated tab gets its own document', () => {
-    const originalDocument = document.implementation.createHTMLDocument()
-    const duplicateDocument = document.implementation.createHTMLDocument()
-    const originalId = getNotificationSessionId(originalDocument)
+      expect(freshId).toMatch(/^[a-f0-9]{32}$/)
+      expect(freshId).not.toBe(originalId)
+      expect(getNotificationSessionId()).toBe(originalId)
+    }
+  )
 
-    expect(getNotificationSessionId(duplicateDocument)).not.toBe(originalId)
-    expect(getNotificationSessionId(originalDocument)).toBe(originalId)
-  })
-
-  it('should use the current document when no document is supplied', () => {
-    expect(getNotificationSessionId()).toBe(getNotificationSessionId(document))
-  })
-
-  it('should keep the ID when the same document is restored from BFCache', () => {
+  it('should keep the ID when the running app is restored from BFCache', () => {
     const sessionId = getNotificationSessionId()
 
     globalThis.window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }))

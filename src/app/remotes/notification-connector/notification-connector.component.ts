@@ -1,4 +1,3 @@
-import { DOCUMENT } from '@angular/common'
 import { Component, Input, inject, DestroyRef, ChangeDetectionStrategy } from '@angular/core'
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop'
 import { Observable, defer, from, timer } from 'rxjs'
@@ -61,9 +60,9 @@ export class NotificationTopic extends Topic<Notification> {
 /**
  * Connects the current user to the notification event bus.
  *
- * Every register frame includes the loaded document's `sessionId`. Reconnects and
+ * Every register frame includes the running app's `sessionId`. Reconnects and
  * connector recreation reuse it; reloads and new tabs start a new session without
- * resuming the previous document's catch-up. Notification payloads are unchanged.
+ * resuming the previous session's catch-up. Notification payloads are unchanged.
  */
 @Component({
   selector: 'app-notification-connector',
@@ -74,7 +73,7 @@ export class NotificationTopic extends Topic<Notification> {
 })
 export class OneCXNotificationConnectorComponent implements ocxRemoteComponent, ocxRemoteWebcomponent {
   private readonly destroyRef = inject(DestroyRef)
-  private readonly sessionId = getNotificationSessionId(inject(DOCUMENT))
+  private readonly sessionId = getNotificationSessionId()
   private sockJsClient?: SockJsRxClient<RawNotification | RegisterMessage, RegisterMessage>
   private destroyed = false
   private readonly reconnectDelay = 5000
