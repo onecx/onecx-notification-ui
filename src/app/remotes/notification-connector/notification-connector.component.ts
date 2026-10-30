@@ -14,12 +14,14 @@ import {
 } from '@onecx/angular-remote-components'
 
 import { createLogger } from 'src/app/shared/utils/logger.utils'
+import { getNotificationSessionId } from 'src/app/shared/utils/notification-session.utils'
 import { SockJsRxClient } from '../../shared/utils/sockjs.utils'
 
 interface RegisterMessage {
   type: 'register'
   address: string
   token: string
+  sessionId: string
 }
 
 export interface RawNotification {
@@ -55,15 +57,25 @@ export class NotificationTopic extends Topic<Notification> {
   }
 }
 
+/**
+ * Connects the current user to the notification event bus.
+ *
+ * Every register frame includes the running app's `sessionId`. Reconnects and
+ * connector recreation reuse it; reloads and new tabs start a new session without
+ * resuming the previous session's catch-up. Notification payloads are unchanged.
+ */
 @Component({
   selector: 'app-notification-connector',
+  standalone: true,
   template: '',
   imports: [AngularRemoteComponentsModule],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class OneCXNotificationConnectorComponent implements ocxRemoteComponent, ocxRemoteWebcomponent {
   private readonly destroyRef = inject(DestroyRef)
+  private readonly sessionId = getNotificationSessionId()
   private sockJsClient?: SockJsRxClient<RawNotification | RegisterMessage, RegisterMessage>
+  private destroyed = false
   private readonly reconnectDelay = 5000
   private _notificationTopic?: NotificationTopic
   private get notificationTopic(): NotificationTopic {
@@ -80,6 +92,7 @@ export class OneCXNotificationConnectorComponent implements ocxRemoteComponent, 
 
   constructor() {
     this.destroyRef.onDestroy(() => {
+      this.destroyed = true
       this.sockJsClient?.close()
       this._notificationTopic?.destroy()
     })
@@ -136,8 +149,9 @@ export class OneCXNotificationConnectorComponent implements ocxRemoteComponent, 
     this.sockJsClient?.close()
     this.sockJsClient = new SockJsRxClient<RawNotification | RegisterMessage, RegisterMessage>({
       onOpen: () => {
+        if (this.destroyed) return
         this.logger.info('WebSocket connection established, connecting with user id:', userId)
-        this.sockJsClient?.send({ type: 'register', address: `notifications.onecx.new.${userId}`, token })
+        this.sendRegisterMessage(userId, token)
       },
       onClose: () => {
         this.logger.info('WebSocket connection closed')
@@ -145,6 +159,16 @@ export class OneCXNotificationConnectorComponent implements ocxRemoteComponent, 
     })
 
     return this.sockJsClient
+  }
+
+  private sendRegisterMessage(userId: string, token: string): void {
+    if (this.destroyed) return
+    this.sockJsClient?.send({
+      type: 'register',
+      address: `notifications.onecx.new.${userId}`,
+      token,
+      sessionId: this.sessionId
+    })
   }
 
   private handleIncomingNotification(notification: RawNotification | RegisterMessage): void {
